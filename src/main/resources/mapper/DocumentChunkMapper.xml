@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace=
+                "com.ljl.agent.mapper.DocumentChunkMapper">
+
+    <resultMap
+            id="DocumentChunkResultMap"
+            type="com.ljl.agent.entity.DocumentChunk">
+
+        <id
+                property="id"
+                column="id"/>
+
+        <result
+                property="documentId"
+                column="document_id"/>
+
+        <result
+                property="knowledgeBaseId"
+                column="knowledge_base_id"/>
+
+        <result
+                property="chunkIndex"
+                column="chunk_index"/>
+
+        <result
+                property="content"
+                column="content"/>
+
+        <result
+                property="metadata"
+                column="metadata"/>
+
+        <result
+                property="createdAt"
+                column="created_at"/>
+
+        <result
+                property="updatedAt"
+                column="updated_at"/>
+
+    </resultMap>
+
+
+    <insert
+            id="insert"
+            parameterType=
+                    "com.ljl.agent.entity.DocumentChunk"
+            useGeneratedKeys="true"
+            keyProperty="id">
+
+        INSERT INTO document_chunk (
+        document_id,
+        knowledge_base_id,
+        chunk_index,
+        content,
+        metadata
+        )
+        VALUES (
+        #{documentId},
+        #{knowledgeBaseId},
+        #{chunkIndex},
+        #{content},
+        #{metadata}
+        )
+
+    </insert>
+
+
+    <select
+            id="selectById"
+            resultMap="DocumentChunkResultMap">
+
+        SELECT
+        id,
+        document_id,
+        knowledge_base_id,
+        chunk_index,
+        content,
+        metadata,
+        created_at,
+        updated_at
+        FROM document_chunk
+        WHERE id = #{id}
+
+    </select>
+
+
+    <select
+            id="selectByDocumentId"
+            resultMap="DocumentChunkResultMap">
+
+        SELECT
+        id,
+        document_id,
+        knowledge_base_id,
+        chunk_index,
+        content,
+        metadata,
+        created_at,
+        updated_at
+        FROM document_chunk
+        WHERE document_id = #{documentId}
+        ORDER BY chunk_index ASC
+
+    </select>
+
+
+    <select
+            id="selectByDocumentIdAndChunkIndex"
+            resultMap="DocumentChunkResultMap">
+
+        SELECT
+        id,
+        document_id,
+        knowledge_base_id,
+        chunk_index,
+        content,
+        metadata,
+        created_at,
+        updated_at
+        FROM document_chunk
+        WHERE document_id = #{documentId}
+        AND chunk_index = #{chunkIndex}
+        LIMIT 1
+
+    </select>
+
+</mapper>

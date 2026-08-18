@@ -1,0 +1,296 @@
+@baseUrl = http://localhost:8080
+@password = Day1Test123!
+@userName = day1_manual_user
+@adminName = day1_manual_admin
+@disabledName = day1_manual_disabled
+
+### M01 public health
+GET {{baseUrl}}/api/health
+Accept: application/json
+
+> {%
+client.test("health is public", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.code === 0, "expected business code 0");
+    client.assert(response.body.data === "OK", "expected data=OK");
+});
+%}
+
+### M02-1 register USER
+POST {{baseUrl}}/api/users/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{userName}}",
+  "password": "{{password}}",
+  "email": "day1_manual_user@example.test"
+}
+
+> {%
+client.test("public registration creates USER only", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.code === 0, "expected business code 0");
+    client.assert(response.body.data.role === "USER", "expected USER role");
+    client.assert(response.body.data.status === 1, "expected enabled user");
+});
+client.global.set("manual_user_id", response.body.data.id);
+%}
+
+### M02-2 register future ADMIN (then update role in MySQL)
+POST {{baseUrl}}/api/users/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{adminName}}",
+  "password": "{{password}}",
+  "email": "day1_manual_admin@example.test"
+}
+
+> {%
+client.test("admin candidate is initially USER", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.data.role === "USER", "public API must not create ADMIN");
+});
+client.global.set("manual_admin_id", response.body.data.id);
+%}
+
+### M02-3 register future disabled user (then update status in MySQL)
+POST {{baseUrl}}/api/users/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{disabledName}}",
+  "password": "{{password}}",
+  "email": "day1_manual_disabled@example.test"
+}
+
+> {%
+client.test("disabled candidate is initially enabled USER", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.data.role === "USER", "expected USER role");
+    client.assert(response.body.data.status === 1, "expected enabled status before SQL update");
+});
+%}
+
+### STOP: update admin role and disabled status in MySQL before continuing
+# UPDATE `user` SET role='ADMIN', status=1 WHERE username='day1_manual_admin';
+# UPDATE `user` SET role='USER', status=0 WHERE username='day1_manual_disabled';
+
+### M03-1 correct USER login and save user_token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "  {{userName}}  ",
+  "password": "{{password}}"
+}
+
+> {%
+client.test("USER login returns safe Bearer JWT", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.code === 0, "expected business code 0");
+    client.assert(response.body.data.tokenType === "Bearer", "expected Bearer token type");
+    client.assert(response.body.data.expiresIn === 1800, "expected 30-minute TTL");
+    client.assert(response.body.data.user.role === "USER", "expected USER role");
+    client.assert(!response.body.data.user.passwordHash, "passwordHash must not be returned");
+});
+client.global.set("user_token", response.body.data.accessToken);
+%}
+
+### M03-2 correct ADMIN login and save admin_token
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{adminName}}",
+  "password": "{{password}}"
+}
+
+> {%
+client.test("ADMIN login gets ADMIN claim source", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.data.user.role === "ADMIN", "expected ADMIN role; run SQL update and re-login");
+});
+client.global.set("admin_token", response.body.data.accessToken);
+%}
+
+### M04-1 wrong password -> 40101
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{userName}}",
+  "password": "WrongPassword123!"
+}
+
+> {%
+client.test("wrong password is credential failure", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40101, "expected business code 40101");
+    client.assert(response.body.message === "用户名或密码错误", "unexpected public error message");
+});
+%}
+
+### M04-2 unknown user -> same 40101
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "day1_user_does_not_exist",
+  "password": "{{password}}"
+}
+
+> {%
+client.test("unknown user does not reveal account existence", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40101, "expected business code 40101");
+    client.assert(response.body.message === "用户名或密码错误", "must match wrong-password message");
+});
+%}
+
+### M04-3 disabled user -> same 40101
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "{{disabledName}}",
+  "password": "{{password}}"
+}
+
+> {%
+client.test("disabled user does not reveal status", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40101, "expected business code 40101");
+    client.assert(response.body.message === "用户名或密码错误", "must match other credential failures");
+});
+%}
+
+### M05 protected API without token -> 40102
+GET {{baseUrl}}/api/knowledge-bases
+Accept: application/json
+
+> {%
+client.test("protected API requires authentication", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40102, "expected business code 40102");
+    client.assert(response.body.message === "未认证或登录状态无效", "unexpected authentication message");
+});
+%}
+
+### M06 authenticated API with USER token -> 200
+GET {{baseUrl}}/api/knowledge-bases
+Authorization: Bearer {{user_token}}
+Accept: application/json
+
+> {%
+client.test("valid USER token reaches authenticated API", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.code === 0, "expected business code 0");
+});
+%}
+
+### M07 remove token immediately after M06 -> 40102 (STATELESS)
+GET {{baseUrl}}/api/knowledge-bases
+Accept: application/json
+
+> {%
+client.test("previous token request did not create login session", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40102, "expected business code 40102");
+});
+%}
+
+### M08 USER token requests ADMIN API -> 40303
+GET {{baseUrl}}/api/users
+Authorization: Bearer {{user_token}}
+Accept: application/json
+
+> {%
+client.test("USER cannot call ADMIN endpoint", function () {
+    client.assert(response.status === 403, "expected HTTP 403");
+    client.assert(response.body.code === 40303, "expected business code 40303");
+    client.assert(response.body.message === "权限不足", "unexpected authorization message");
+});
+%}
+
+### M09 ADMIN token requests ADMIN API -> 200
+GET {{baseUrl}}/api/users
+Authorization: Bearer {{admin_token}}
+Accept: application/json
+
+> {%
+client.test("ADMIN can call user-management endpoint", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    client.assert(response.body.code === 0, "expected business code 0");
+});
+%}
+
+### M10-1 append a character to a valid token -> 40102
+GET {{baseUrl}}/api/knowledge-bases
+Authorization: Bearer {{user_token}}x
+Accept: application/json
+
+> {%
+client.test("tampered token is rejected", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40102, "expected business code 40102");
+});
+%}
+
+### M10-2 malformed token -> 40102
+GET {{baseUrl}}/api/knowledge-bases
+Authorization: Bearer not-a-jwt
+Accept: application/json
+
+> {%
+client.test("malformed token is rejected", function () {
+    client.assert(response.status === 401, "expected HTTP 401");
+    client.assert(response.body.code === 40102, "expected business code 40102");
+});
+%}
+
+### M11 old login path is no longer a public authentication bypass
+POST {{baseUrl}}/api/users/login
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+> {%
+client.test("old login path is not public", function () {
+    client.assert(response.status === 401, "expected HTTP 401 before controller routing");
+    client.assert(response.body.code === 40102, "expected business code 40102");
+});
+%}
+
+### M12-1 Day 1 OpenAPI document
+GET {{baseUrl}}/v3/api-docs/stage-3-day-1
+Accept: application/json
+
+> {%
+client.test("OpenAPI exposes the new login and bearer scheme", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+    const text = JSON.stringify(response.body);
+    client.assert(text.indexOf("/api/auth/login") >= 0, "new login path is missing");
+    client.assert(text.indexOf("/api/users/login") < 0, "old login path must be absent");
+    client.assert(text.indexOf("bearerAuth") >= 0, "bearerAuth is missing");
+});
+%}
+
+### M12-2 Swagger UI
+GET {{baseUrl}}/swagger-ui/index.html
+Accept: text/html
+
+> {%
+client.test("Swagger UI is public in dev profile", function () {
+    client.assert(response.status === 200, "expected HTTP 200");
+});
+%}

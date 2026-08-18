@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: agent-backend
+
+server:
+  port: 8080
+
+app:
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:https://ljl-agent-backend.local}
+      secret-base64: ${JWT_SECRET_BASE64}
+      access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:30m}

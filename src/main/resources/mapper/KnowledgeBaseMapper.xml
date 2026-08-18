@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ljl.agent.mapper.KnowledgeBaseMapper">
+
+    <resultMap id="KnowledgeBaseResultMap"
+               type="com.ljl.agent.entity.KnowledgeBase">
+
+        <id property="id" column="id"/>
+
+        <result property="userId" column="user_id"/>
+        <result property="name" column="name"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.ljl.agent.entity.KnowledgeBase"
+            useGeneratedKeys="true"
+            keyProperty="id">
+
+        INSERT INTO knowledge_base (
+        user_id,
+        name,
+        description
+        )
+        VALUES (
+        #{userId},
+        #{name},
+        #{description}
+        )
+
+    </insert>
+
+    <select id="selectById"
+            resultMap="KnowledgeBaseResultMap">
+
+        SELECT
+        id,
+        user_id,
+        name,
+        description,
+        created_at,
+        updated_at
+        FROM knowledge_base
+        WHERE id = #{id}
+
+    </select>
+
+    <select id="selectAll"
+            resultMap="KnowledgeBaseResultMap">
+
+        SELECT
+        id,
+        user_id,
+        name,
+        description,
+        created_at,
+        updated_at
+        FROM knowledge_base
+        ORDER BY id DESC
+
+    </select>
+
+    <select id="selectByUserIdAndName"
+            resultMap="KnowledgeBaseResultMap">
+
+        SELECT
+        id,
+        user_id,
+        name,
+        description,
+        created_at,
+        updated_at
+        FROM knowledge_base
+        WHERE user_id = #{userId}
+        AND name = #{name}
+        LIMIT 1
+
+    </select>
+
+</mapper>

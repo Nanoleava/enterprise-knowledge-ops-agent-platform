@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.ljl.agent.mapper.ChatMessageMapper">
+
+    <resultMap id="ChatMessageResultMap"
+               type="com.ljl.agent.entity.ChatMessage">
+        <id property="id" column="id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="requestId" column="request_id"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.ljl.agent.entity.ChatMessage"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO chat_message (
+        session_id,
+        user_id,
+        role,
+        content,
+        request_id
+        )
+        VALUES (
+        #{sessionId},
+        #{userId},
+        #{role},
+        #{content},
+        #{requestId}
+        )
+    </insert>
+
+    <select id="selectById"
+            resultMap="ChatMessageResultMap">
+        SELECT
+        id,
+        session_id,
+        user_id,
+        role,
+        content,
+        request_id,
+        created_at,
+        updated_at
+        FROM chat_message
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByRequestId"
+            resultMap="ChatMessageResultMap">
+        SELECT
+        id,
+        session_id,
+        user_id,
+        role,
+        content,
+        request_id,
+        created_at,
+        updated_at
+        FROM chat_message
+        WHERE request_id = #{requestId}
+        LIMIT 1
+    </select>
+
+    <select id="selectBySessionId"
+            resultMap="ChatMessageResultMap">
+        SELECT
+        id,
+        session_id,
+        user_id,
+        role,
+        content,
+        request_id,
+        created_at,
+        updated_at
+        FROM chat_message
+        WHERE session_id = #{sessionId}
+        ORDER BY created_at ASC, id ASC
+    </select>
+
+</mapper>
