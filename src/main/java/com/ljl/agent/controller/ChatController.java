@@ -5,12 +5,15 @@ import com.ljl.agent.dto.request.ChatMessageCreateRequest;
 import com.ljl.agent.dto.request.ChatSessionCreateRequest;
 import com.ljl.agent.dto.response.ChatMessageVO;
 import com.ljl.agent.dto.response.ChatSessionVO;
+import com.ljl.agent.security.CurrentUser;
+import com.ljl.agent.redis.FixedWindowRateLimiter;
 import com.ljl.agent.service.ChatService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,36 +26,50 @@ import java.util.List;
 public class ChatController {
 
     private final ChatService chatService;
+    private final CurrentUser currentUser;
+    private final FixedWindowRateLimiter rateLimiter;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(
+            ChatService chatService,
+            CurrentUser currentUser,
+            FixedWindowRateLimiter rateLimiter
+    ) {
         this.chatService = chatService;
+        this.currentUser = currentUser;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/sessions")
     @Operation(summary = "创建聊天会话")
     public Result<ChatSessionVO> createSession(
-            @Valid @RequestBody ChatSessionCreateRequest request) {
+            @Valid @RequestBody ChatSessionCreateRequest request,
+            Authentication authentication) {
 
         return Result.success(
-                chatService.createSession(request)
+                chatService.createSession(
+                        currentUser.requireUserId(authentication),
+                        request
+                )
         );
     }
 
     @GetMapping("/sessions")
     @Operation(summary = "查询用户的聊天会话")
     public Result<List<ChatSessionVO>> listSessions(
-            @Parameter(description = "用户 ID", example = "1")
-            @RequestParam
-            @Positive(message = "用户 ID 必须大于 0")
-            Long userId) {
+            Authentication authentication) {
 
         return Result.success(
-                chatService.listSessions(userId)
+                chatService.listSessions(
+                        currentUser.requireUserId(authentication)
+                )
         );
     }
 
     @PostMapping("/sessions/{sessionId}/messages")
-    @Operation(summary = "保存聊天消息")
+    @Operation(
+            summary = "保存聊天消息",
+            description = "只允许会话 owner 写入；按当前 JWT 用户执行 Redis Lua 固定窗口限流"
+    )
     public Result<ChatMessageVO> createMessage(
             @Parameter(description = "会话 ID", example = "1")
             @PathVariable
@@ -60,10 +77,17 @@ public class ChatController {
             Long sessionId,
             @Valid
             @RequestBody
-            ChatMessageCreateRequest request) {
+            ChatMessageCreateRequest request,
+            Authentication authentication) {
 
+        Long currentUserId = currentUser.requireUserId(authentication);
+        rateLimiter.check(currentUserId);
         return Result.success(
-                chatService.createMessage(sessionId, request)
+                chatService.createMessage(
+                        currentUserId,
+                        sessionId,
+                        request
+                )
         );
     }
 
@@ -73,10 +97,14 @@ public class ChatController {
             @Parameter(description = "会话 ID", example = "1")
             @PathVariable
             @Positive(message = "会话 ID 必须大于 0")
-            Long sessionId) {
+            Long sessionId,
+            Authentication authentication) {
 
         return Result.success(
-                chatService.listMessages(sessionId)
+                chatService.listMessages(
+                        currentUser.requireUserId(authentication),
+                        sessionId
+                )
         );
     }
 }

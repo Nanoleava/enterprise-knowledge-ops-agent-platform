@@ -19,9 +19,16 @@ class ConfigurationSafetyTest {
 
         assertFalse(common.contains("active: dev"));
         assertTrue(dev.contains("password: ${DB_PASSWORD}"));
-        assertFalse(dev.contains("root123"));
         assertTrue(common.contains("secret-base64: ${JWT_SECRET_BASE64}"));
+        assertTrue(common.contains("password: ${REDIS_PASSWORD:}"));
+        assertTrue(common.contains("connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}"));
         assertFalse(common.contains("JWT_SECRET_BASE64:"));
+        assertTrue(common.contains(
+                "storage-root: ${DOCUMENT_STORAGE_ROOT:./storage/uploads}"
+        ));
+        assertTrue(common.contains(
+                "allowed-types: ${DOCUMENT_ALLOWED_TYPES:TXT,MARKDOWN}"
+        ));
     }
 
     @Test

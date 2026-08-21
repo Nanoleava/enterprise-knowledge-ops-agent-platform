@@ -9,14 +9,18 @@ import java.util.List;
 
 public interface ChatService {
 
-    ChatSessionVO createSession(ChatSessionCreateRequest request);
+    ChatSessionVO createSession(
+            Long currentUserId,
+            ChatSessionCreateRequest request
+    );
 
-    List<ChatSessionVO> listSessions(Long userId);
+    List<ChatSessionVO> listSessions(Long currentUserId);
 
     ChatMessageVO createMessage(
+            Long currentUserId,
             Long sessionId,
             ChatMessageCreateRequest request
     );
 
-    List<ChatMessageVO> listMessages(Long sessionId);
+    List<ChatMessageVO> listMessages(Long currentUserId, Long sessionId);
 }

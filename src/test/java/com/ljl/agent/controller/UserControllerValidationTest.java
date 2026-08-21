@@ -3,6 +3,7 @@ package com.ljl.agent.controller;
 import com.ljl.agent.dto.response.UserVO;
 import com.ljl.agent.exception.BusinessException;
 import com.ljl.agent.exception.GlobalExceptionHandler;
+import com.ljl.agent.security.CurrentUser;
 import com.ljl.agent.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +34,10 @@ class UserControllerValidationTest {
         validator.afterPropertiesSet();
 
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new UserController(userService))
+                .standaloneSetup(new UserController(
+                        userService,
+                        mock(CurrentUser.class)
+                ))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();

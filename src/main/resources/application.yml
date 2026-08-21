@@ -1,6 +1,18 @@
 spring:
   application:
     name: agent-backend
+  servlet:
+    multipart:
+      max-file-size: ${DOCUMENT_MAX_FILE_SIZE:10MB}
+      max-request-size: ${DOCUMENT_MAX_REQUEST_SIZE:11MB}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
+      timeout: ${REDIS_TIMEOUT:2s}
 
 server:
   port: 8080
@@ -11,3 +23,12 @@ app:
       issuer: ${JWT_ISSUER:https://ljl-agent-backend.local}
       secret-base64: ${JWT_SECRET_BASE64}
       access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:30m}
+  rate-limit:
+    chat-message:
+      limit: ${RATE_LIMIT_CHAT_MESSAGE_LIMIT:20}
+      window: ${RATE_LIMIT_CHAT_MESSAGE_WINDOW:1m}
+      key-ttl-buffer: ${RATE_LIMIT_KEY_TTL_BUFFER:5s}
+  document:
+    storage-root: ${DOCUMENT_STORAGE_ROOT:./storage/uploads}
+    max-file-size: ${DOCUMENT_MAX_FILE_SIZE:10MB}
+    allowed-types: ${DOCUMENT_ALLOWED_TYPES:TXT,MARKDOWN}

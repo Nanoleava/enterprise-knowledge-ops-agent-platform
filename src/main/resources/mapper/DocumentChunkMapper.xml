@@ -109,6 +109,12 @@
 
     </select>
 
+    <select id="countByDocumentId" resultType="long">
+        SELECT COUNT(*)
+        FROM document_chunk
+        WHERE document_id = #{documentId}
+    </select>
+
 
     <select
             id="selectByDocumentIdAndChunkIndex"

@@ -24,7 +24,7 @@ class SchemaIntegrationTest extends AbstractIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void shouldMatchStageTwoCanonicalSchema() {
+    void shouldMatchStageFourDayOneCanonicalSchema() {
         List<String> tables = jdbcTemplate.queryForList(
                 """
                 SELECT table_name
@@ -53,6 +53,16 @@ class SchemaIntegrationTest extends AbstractIntegrationTest {
         assertEquals("bigint", columnType("document", "user_id"));
         assertEquals("bigint", columnType("chat_session", "user_id"));
         assertEquals("bigint", columnType("chat_message", "user_id"));
+        assertEquals("varchar", columnType("document", "original_file_name"));
+        assertEquals("varchar", columnType("document", "stored_file_name"));
+        assertEquals("varchar", columnType("document", "file_type"));
+        assertEquals("bigint", columnType("document", "file_size"));
+        assertEquals("varchar", columnType("document", "file_path"));
+        assertEquals("char", columnType("document", "file_checksum"));
+        assertEquals("varchar", columnType("document", "parse_status"));
+        assertEquals("varchar", columnType("document", "chunk_status"));
+        assertEquals("varchar", columnType("document", "process_error"));
+        assertEquals("datetime", columnType("document", "processed_at"));
 
         assertEquals(1, indexCount("user", "uk_user_username"));
         assertEquals(1, indexCount(
@@ -70,6 +80,18 @@ class SchemaIntegrationTest extends AbstractIntegrationTest {
         assertEquals(1, indexCount(
                 "chat_message",
                 "uk_chat_message_request_id"
+        ));
+        assertEquals(1, indexCount(
+                "document",
+                "idx_document_user_parse_status"
+        ));
+        assertEquals("NOT_APPLICABLE", columnDefault(
+                "document",
+                "parse_status"
+        ));
+        assertEquals("NOT_APPLICABLE", columnDefault(
+                "document",
+                "chunk_status"
         ));
     }
 
@@ -102,5 +124,20 @@ class SchemaIntegrationTest extends AbstractIntegrationTest {
                 index
         );
         return count == null ? 0 : count;
+    }
+
+    private String columnDefault(String table, String column) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT column_default
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = ?
+                  AND column_name = ?
+                """,
+                String.class,
+                table,
+                column
+        );
     }
 }

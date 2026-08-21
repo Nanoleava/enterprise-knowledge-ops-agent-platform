@@ -5,13 +5,17 @@ import com.ljl.agent.auth.JwtTokenService;
 import com.ljl.agent.config.OpenApiConfig;
 import com.ljl.agent.config.SecurityConfig;
 import com.ljl.agent.controller.AuthController;
+import com.ljl.agent.controller.DocumentUploadController;
 import com.ljl.agent.controller.HealthController;
 import com.ljl.agent.controller.KnowledgeBaseController;
 import com.ljl.agent.controller.UserController;
 import com.ljl.agent.dto.response.UserVO;
 import com.ljl.agent.entity.User;
 import com.ljl.agent.exception.GlobalExceptionHandler;
+import com.ljl.agent.ingestion.DocumentIngestionService;
 import com.ljl.agent.mapper.UserMapper;
+import com.ljl.agent.redis.TokenBlacklistService;
+import com.ljl.agent.redis.BlacklistUnavailableException;
 import com.ljl.agent.service.KnowledgeBaseService;
 import com.ljl.agent.service.UserService;
 import com.ljl.agent.util.PasswordUtils;
@@ -29,6 +33,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.context.ActiveProfiles;
@@ -50,8 +56,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -89,6 +97,12 @@ class SecurityWebIntegrationTest {
     @Autowired
     private KnowledgeBaseService knowledgeBaseService;
 
+    @Autowired
+    private DocumentIngestionService documentIngestionService;
+
+    @Autowired
+    private TokenBlacklistService tokenBlacklistService;
+
     private MockMvc mockMvc;
 
     @DynamicPropertySource
@@ -100,7 +114,13 @@ class SecurityWebIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        reset(userMapper, userService, knowledgeBaseService);
+        reset(
+                userMapper,
+                userService,
+                knowledgeBaseService,
+                documentIngestionService,
+                tokenBlacklistService
+        );
         mockMvc = webAppContextSetup(applicationContext)
                 .apply(springSecurity())
                 .build();
@@ -195,7 +215,8 @@ class SecurityWebIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40102));
 
-        when(knowledgeBaseService.listAll()).thenReturn(List.of());
+        when(knowledgeBaseService.listByCurrentUser(21L))
+                .thenReturn(List.of());
         String userToken = signedToken(
                 "21",
                 User.ROLE_USER,
@@ -215,6 +236,10 @@ class SecurityWebIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(40102));
 
+        mockMvc.perform(get("/api/documents/30/processing-status"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40102));
+
         mockMvc.perform(get("/api/users")
                         .header(
                                 HttpHeaders.AUTHORIZATION,
@@ -226,6 +251,17 @@ class SecurityWebIntegrationTest {
                 ))
                 .andExpect(jsonPath("$.code").value(40303))
                 .andExpect(jsonPath("$.message").value("权限不足"));
+
+        when(userService.findById(21L))
+                .thenReturn(userView(User.ROLE_USER));
+        mockMvc.perform(get("/api/users/me")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + userToken
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(21))
+                .andExpect(jsonPath("$.data.role").value("USER"));
 
         when(userService.findAll()).thenReturn(List.of());
         String adminToken = signedToken(
@@ -287,9 +323,78 @@ class SecurityWebIntegrationTest {
     }
 
     @Test
+    void shouldCloseLogoutBlacklistLoopAndKeepLogoutIdempotent()
+            throws Exception {
+        String token = signedToken(
+                "21",
+                User.ROLE_USER,
+                TEST_ISSUER,
+                Instant.now().minusSeconds(5),
+                Instant.now().plusSeconds(300)
+        );
+
+        when(tokenBlacklistService.isBlacklisted(anyString()))
+                .thenReturn(false);
+        mockMvc.perform(post("/api/auth/logout")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + token
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+        verify(tokenBlacklistService).revoke(any(Jwt.class));
+
+        reset(tokenBlacklistService);
+        when(tokenBlacklistService.isBlacklisted(anyString()))
+                .thenReturn(true);
+
+        mockMvc.perform(get("/api/knowledge-bases")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + token
+                        ))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(40102));
+
+        mockMvc.perform(post("/api/auth/logout")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + token
+                        ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
+    }
+
+    @Test
+    void shouldFailClosedWith503WhenBlacklistRedisIsUnavailable()
+            throws Exception {
+        when(tokenBlacklistService.isBlacklisted(anyString()))
+                .thenThrow(new BlacklistUnavailableException(
+                        new RedisConnectionFailureException("down")
+                ));
+        String token = signedToken(
+                "21",
+                User.ROLE_USER,
+                TEST_ISSUER,
+                Instant.now().minusSeconds(5),
+                Instant.now().plusSeconds(300)
+        );
+
+        mockMvc.perform(get("/api/knowledge-bases")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + token
+                        ))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value(50301))
+                .andExpect(jsonPath("$.message")
+                        .value("认证服务暂时不可用"));
+    }
+
+    @Test
     void shouldExposeDevOpenApiAndBearerSecurityScheme() throws Exception {
         String apiDocs = mockMvc.perform(get(
-                        "/v3/api-docs/stage-3-day-1"
+                        "/v3/api-docs/stage-4-day-1"
                 ))
                 .andExpect(status().isOk())
                 .andReturn()
@@ -297,9 +402,21 @@ class SecurityWebIntegrationTest {
                 .getContentAsString(StandardCharsets.UTF_8);
 
         assertTrue(apiDocs.contains("\"/api/auth/login\""));
+        assertTrue(apiDocs.contains("\"/api/auth/logout\""));
+        assertTrue(apiDocs.contains("\"/api/users/me\""));
         assertFalse(apiDocs.contains("\"/api/users/login\""));
         assertTrue(apiDocs.contains("\"bearerAuth\""));
         assertTrue(apiDocs.contains("\"scheme\":\"bearer\""));
+        assertTrue(apiDocs.contains(
+                "\"/api/knowledge-bases/{knowledgeBaseId}/documents/upload\""
+        ));
+        assertTrue(apiDocs.contains(
+                "\"/api/documents/{documentId}/processing-status\""
+        ));
+        assertTrue(apiDocs.contains("\"413\""));
+        assertTrue(apiDocs.contains("\"422\""));
+        assertTrue(apiDocs.contains("\"429\""));
+        assertTrue(apiDocs.contains("\"503\""));
 
         mockMvc.perform(get("/swagger-ui/index.html"))
                 .andExpect(status().isOk());
@@ -412,6 +529,7 @@ class SecurityWebIntegrationTest {
             OpenApiConfig.class,
             JsonAuthenticationEntryPoint.class,
             JsonAccessDeniedHandler.class,
+            CurrentUser.class,
             ProjectPasswordEncoder.class,
             ProjectUserDetailsService.class,
             JwtTokenService.class,
@@ -420,6 +538,7 @@ class SecurityWebIntegrationTest {
             HealthController.class,
             UserController.class,
             KnowledgeBaseController.class,
+            DocumentUploadController.class,
             GlobalExceptionHandler.class,
             CollaboratorConfiguration.class
     })
@@ -442,6 +561,16 @@ class SecurityWebIntegrationTest {
         @Bean
         KnowledgeBaseService knowledgeBaseService() {
             return mock(KnowledgeBaseService.class);
+        }
+
+        @Bean
+        DocumentIngestionService documentIngestionService() {
+            return mock(DocumentIngestionService.class);
+        }
+
+        @Bean
+        TokenBlacklistService tokenBlacklistService() {
+            return mock(TokenBlacklistService.class);
         }
     }
 }

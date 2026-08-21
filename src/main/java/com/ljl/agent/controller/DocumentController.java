@@ -7,12 +7,14 @@ import com.ljl.agent.dto.request.DocumentCreateRequest;
 import com.ljl.agent.dto.request.DocumentPageQuery;
 import com.ljl.agent.dto.response.DocumentChunkVO;
 import com.ljl.agent.dto.response.DocumentVO;
+import com.ljl.agent.security.CurrentUser;
 import com.ljl.agent.service.DocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,11 +27,14 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final CurrentUser currentUser;
 
     public DocumentController(
-            DocumentService documentService) {
+            DocumentService documentService,
+            CurrentUser currentUser) {
 
         this.documentService = documentService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping("/documents")
@@ -37,10 +42,14 @@ public class DocumentController {
     public Result<DocumentVO> create(
             @Valid
             @RequestBody
-            DocumentCreateRequest request) {
+            DocumentCreateRequest request,
+            Authentication authentication) {
 
         DocumentVO document =
-                documentService.create(request);
+                documentService.create(
+                        currentUser.requireUserId(authentication),
+                        request
+                );
 
         return Result.success(document);
     }
@@ -51,19 +60,25 @@ public class DocumentController {
             description = "支持 page、size、keyword、knowledgeBaseId 动态条件"
     )
     public Result<PageResult<DocumentVO>> page(
-            @Valid @ModelAttribute DocumentPageQuery query) {
+            @Valid @ModelAttribute DocumentPageQuery query,
+            Authentication authentication) {
 
-        return Result.success(documentService.page(query));
+        return Result.success(documentService.page(
+                currentUser.requireUserId(authentication),
+                query
+        ));
     }
 
     @GetMapping("/knowledge-bases/{knowledgeBaseId}/documents")
     @Operation(summary = "查询知识库下的文档")
     public Result<List<DocumentVO>> listByKnowledgeBaseId(
             @Parameter(description = "知识库 ID", example = "1")
-            @PathVariable Long knowledgeBaseId) {
+            @PathVariable Long knowledgeBaseId,
+            Authentication authentication) {
 
         List<DocumentVO> documents =
                 documentService.listByKnowledgeBaseId(
+                        currentUser.requireUserId(authentication),
                         knowledgeBaseId
                 );
 
@@ -75,9 +90,11 @@ public class DocumentController {
     public Result<DocumentChunkVO> createChunk(
             @Parameter(description = "文档 ID", example = "1")
             @PathVariable Long documentId,
-            @Valid @RequestBody DocumentChunkCreateRequest request
+            @Valid @RequestBody DocumentChunkCreateRequest request,
+            Authentication authentication
     ) {
         DocumentChunkVO chunk = documentService.createChunk(
+                currentUser.requireUserId(authentication),
                 documentId,
                 request
         );
@@ -89,10 +106,14 @@ public class DocumentController {
     @Operation(summary = "查询文档切片")
     public Result<List<DocumentChunkVO>> listChunksByDocumentId(
             @Parameter(description = "文档 ID", example = "1")
-            @PathVariable Long documentId
+            @PathVariable Long documentId,
+            Authentication authentication
     ) {
         List<DocumentChunkVO> chunks =
-                documentService.listChunksByDocumentId(documentId);
+                documentService.listChunksByDocumentId(
+                        currentUser.requireUserId(authentication),
+                        documentId
+                );
 
         return Result.success(chunks);
     }
@@ -103,10 +124,14 @@ public class DocumentController {
             @Parameter(description = "文档 ID", example = "1")
             @PathVariable
             @Positive(message = "文档ID必须是正整数")
-            Long id) {
+            Long id,
+            Authentication authentication) {
 
         return Result.success(
-                documentService.getById(id)
+                documentService.getById(
+                        currentUser.requireUserId(authentication),
+                        id
+                )
         );
     }
 
@@ -119,9 +144,13 @@ public class DocumentController {
             @Parameter(description = "文档 ID", example = "1")
             @PathVariable
             @Positive(message = "文档ID必须是正整数")
-            Long id) {
+            Long id,
+            Authentication authentication) {
 
-        documentService.deleteById(id);
+        documentService.deleteById(
+                currentUser.requireUserId(authentication),
+                id
+        );
 
         return Result.success(null);
     }

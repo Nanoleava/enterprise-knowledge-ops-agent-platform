@@ -32,13 +32,37 @@ public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
             HttpServletResponse response,
             AuthenticationException authException
     ) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+        boolean dependencyUnavailable = hasCause(
+                authException,
+                JwtBlacklistDependencyException.class
+        );
+        response.setStatus(dependencyUnavailable
+                ? HttpServletResponse.SC_SERVICE_UNAVAILABLE
+                : HttpServletResponse.SC_UNAUTHORIZED);
+        if (!dependencyUnavailable) {
+            response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+        }
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(
                 response.getOutputStream(),
-                Result.failure(ErrorCode.AUTHENTICATION_REQUIRED)
+                Result.failure(dependencyUnavailable
+                        ? ErrorCode.AUTHENTICATION_SERVICE_UNAVAILABLE
+                        : ErrorCode.AUTHENTICATION_REQUIRED)
         );
+    }
+
+    private boolean hasCause(
+            Throwable throwable,
+            Class<? extends Throwable> expectedType
+    ) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (expectedType.isInstance(current)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

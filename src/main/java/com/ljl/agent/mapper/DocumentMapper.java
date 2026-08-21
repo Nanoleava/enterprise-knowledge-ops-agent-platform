@@ -11,13 +11,21 @@ public interface DocumentMapper {
 
     int insert(Document document);
 
+    int insertUploaded(Document document);
+
     Document selectById(Long id);
 
     List<Document> selectAll();
 
-    List<Document> selectByKnowledgeBaseId(Long knowledgeBaseId);
+    List<Document> selectByKnowledgeBaseId(
+            @Param("userId") Long userId,
+            @Param("knowledgeBaseId") Long knowledgeBaseId
+    );
 
-    int deleteById(@Param("id") Long id);
+    int deleteByIdAndUserId(
+            @Param("id") Long id,
+            @Param("userId") Long userId
+    );
 
     Document selectByKnowledgeBaseIdAndTitle(
             @Param("knowledgeBaseId") Long knowledgeBaseId,
@@ -25,6 +33,7 @@ public interface DocumentMapper {
     );
 
     List<Document> selectPage(
+            @Param("userId") Long userId,
             @Param("keyword") String keyword,
             @Param("knowledgeBaseId") Long knowledgeBaseId,
             @Param("offset") long offset,
@@ -32,7 +41,26 @@ public interface DocumentMapper {
     );
 
     long countPage(
+            @Param("userId") Long userId,
             @Param("keyword") String keyword,
             @Param("knowledgeBaseId") Long knowledgeBaseId
+    );
+
+    int markParseProcessing(
+            @Param("id") Long id,
+            @Param("userId") Long userId,
+            @Param("force") boolean force
+    );
+
+    int updateParseSuccess(
+            @Param("id") Long id,
+            @Param("userId") Long userId,
+            @Param("content") String content
+    );
+
+    int updateParseFailed(
+            @Param("id") Long id,
+            @Param("userId") Long userId,
+            @Param("processError") String processError
     );
 }

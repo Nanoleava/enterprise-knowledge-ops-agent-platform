@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @SpringBootTest
@@ -83,8 +84,13 @@ class DocumentMapperTest extends AbstractIntegrationTest {
                 "Java"
         );
 
-        assertEquals(2L, documentMapper.countPage("Java", target.getId()));
+        assertEquals(2L, documentMapper.countPage(
+                user.getId(),
+                "Java",
+                target.getId()
+        ));
         List<Document> page = documentMapper.selectPage(
+                user.getId(),
                 "Java",
                 target.getId(),
                 0,
@@ -107,12 +113,73 @@ class DocumentMapperTest extends AbstractIntegrationTest {
                         .size()
         );
 
-        assertEquals(1, documentMapper.deleteById(firstMatch.getId()));
+        assertEquals(1, documentMapper.deleteByIdAndUserId(
+                firstMatch.getId(),
+                user.getId()
+        ));
         assertNull(documentMapper.selectById(firstMatch.getId()));
         assertEquals(
                 List.of(),
                 documentChunkMapper.selectByDocumentId(firstMatch.getId())
         );
+    }
+
+    @Test
+    void shouldPersistUploadedMetadataAndMoveParseStateConditionally() {
+        String marker = String.valueOf(System.nanoTime());
+        User user = insertUser("document_ingestion_" + marker);
+        KnowledgeBase knowledgeBase = insertKnowledgeBase(
+                user.getId(),
+                "摄取知识库_" + marker
+        );
+
+        Document document = new Document();
+        document.setUserId(user.getId());
+        document.setKnowledgeBaseId(knowledgeBase.getId());
+        document.setTitle("guide_" + marker);
+        document.setContent("");
+        document.setStatus(Document.STATUS_ACTIVE);
+        document.setOriginalFileName("guide.txt");
+        document.setStoredFileName("a".repeat(32) + ".txt");
+        document.setFileType("TXT");
+        document.setFileSize(6L);
+        document.setFilePath(
+                user.getId() + "/" + knowledgeBase.getId() + "/a.txt"
+        );
+        document.setFileChecksum("b".repeat(64));
+        document.setParseStatus(Document.PROCESS_PENDING);
+        document.setChunkStatus(Document.PROCESS_PENDING);
+
+        assertEquals(1, documentMapper.insertUploaded(document));
+        Document pending = documentMapper.selectById(document.getId());
+        assertNotNull(pending);
+        assertEquals("guide.txt", pending.getOriginalFileName());
+        assertEquals("TXT", pending.getFileType());
+        assertEquals(Document.PROCESS_PENDING, pending.getParseStatus());
+        assertEquals(Document.PROCESS_PENDING, pending.getChunkStatus());
+
+        assertEquals(1, documentMapper.markParseProcessing(
+                document.getId(),
+                user.getId(),
+                false
+        ));
+        assertEquals(0, documentMapper.markParseProcessing(
+                document.getId(),
+                user.getId(),
+                false
+        ));
+        assertEquals(1, documentMapper.updateParseSuccess(
+                document.getId(),
+                user.getId(),
+                "解析正文"
+        ));
+
+        Document success = documentMapper.selectById(document.getId());
+        assertEquals("解析正文", success.getContent());
+        assertEquals(Document.PROCESS_SUCCESS, success.getParseStatus());
+        assertNull(success.getProcessError());
+        assertNotNull(success.getProcessedAt());
+        assertEquals(0L, documentChunkMapper.countByDocumentId(document.getId()));
     }
 
     private User insertUser(String username) {

@@ -3,12 +3,14 @@ package com.ljl.agent.controller;
 import com.ljl.agent.common.Result;
 import com.ljl.agent.dto.request.KnowledgeBaseCreateRequest;
 import com.ljl.agent.dto.response.KnowledgeBaseVO;
+import com.ljl.agent.security.CurrentUser;
 import com.ljl.agent.service.KnowledgeBaseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,11 +23,14 @@ import java.util.List;
 public class KnowledgeBaseController {
 
     private final KnowledgeBaseService knowledgeBaseService;
+    private final CurrentUser currentUser;
 
     public KnowledgeBaseController(
-            KnowledgeBaseService knowledgeBaseService) {
+            KnowledgeBaseService knowledgeBaseService,
+            CurrentUser currentUser) {
 
         this.knowledgeBaseService = knowledgeBaseService;
+        this.currentUser = currentUser;
     }
 
     @PostMapping
@@ -33,20 +38,27 @@ public class KnowledgeBaseController {
     public Result<KnowledgeBaseVO> create(
             @Valid
             @RequestBody
-            KnowledgeBaseCreateRequest request) {
+            KnowledgeBaseCreateRequest request,
+            Authentication authentication) {
 
         KnowledgeBaseVO knowledgeBase =
-                knowledgeBaseService.create(request);
+                knowledgeBaseService.create(
+                        currentUser.requireUserId(authentication),
+                        request
+                );
 
         return Result.success(knowledgeBase);
     }
 
     @GetMapping
-    @Operation(summary = "查询全部知识库")
-    public Result<List<KnowledgeBaseVO>> list() {
+    @Operation(summary = "查询当前用户的知识库")
+    public Result<List<KnowledgeBaseVO>> list(
+            Authentication authentication) {
 
         List<KnowledgeBaseVO> knowledgeBases =
-                knowledgeBaseService.listAll();
+                knowledgeBaseService.listByCurrentUser(
+                        currentUser.requireUserId(authentication)
+                );
 
         return Result.success(knowledgeBases);
     }
@@ -57,10 +69,14 @@ public class KnowledgeBaseController {
             @Parameter(description = "知识库 ID", example = "1")
             @PathVariable
             @Positive(message = "知识库ID必须是正整数")
-            Long id) {
+            Long id,
+            Authentication authentication) {
 
         return Result.success(
-                knowledgeBaseService.getById(id)
+                knowledgeBaseService.getById(
+                        currentUser.requireUserId(authentication),
+                        id
+                )
         );
     }
 }

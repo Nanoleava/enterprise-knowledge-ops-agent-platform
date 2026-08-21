@@ -61,7 +61,6 @@ class ChatServiceImplTest {
             CapturedOutput output
     ) {
         ChatSessionCreateRequest request = sessionRequest(
-                7L,
                 "  Java Agent  "
         );
         AtomicReference<ChatSession> inserted = new AtomicReference<>();
@@ -81,7 +80,7 @@ class ChatServiceImplTest {
             return value;
         });
 
-        ChatSessionVO result = service.createSession(request);
+        ChatSessionVO result = service.createSession(7L, request);
 
         assertEquals(20L, result.getId());
         assertEquals(7L, result.getUserId());
@@ -99,7 +98,10 @@ class ChatServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.createSession(sessionRequest(7L, "会话"))
+                () -> service.createSession(
+                        7L,
+                        sessionRequest("会话")
+                )
         );
 
         assertEquals(40301, exception.getCode());
@@ -115,7 +117,10 @@ class ChatServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.createSession(sessionRequest(7L, "会话"))
+                () -> service.createSession(
+                        7L,
+                        sessionRequest("会话")
+                )
         );
 
         assertEquals(50005, exception.getCode());
@@ -148,6 +153,7 @@ class ChatServiceImplTest {
         });
 
         ChatMessageVO result = service.createMessage(
+                7L,
                 20L,
                 messageRequest(" assistant ", content, " request-1 ")
         );
@@ -171,6 +177,7 @@ class ChatServiceImplTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createMessage(
+                        7L,
                         20L,
                         messageRequest("USER", "内容", "request-1")
                 )
@@ -196,6 +203,7 @@ class ChatServiceImplTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createMessage(
+                        7L,
                         20L,
                         messageRequest("USER", "内容", "request-1")
                 )
@@ -217,6 +225,7 @@ class ChatServiceImplTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createMessage(
+                        7L,
                         20L,
                         messageRequest("USER", "内容", "request-1")
                 )
@@ -236,7 +245,7 @@ class ChatServiceImplTest {
                         message(31L, 20L, 7L, "request-2")
                 ));
 
-        List<ChatMessageVO> result = service.listMessages(20L);
+        List<ChatMessageVO> result = service.listMessages(7L, 20L);
 
         assertEquals(2, result.size());
         assertEquals(30L, result.getFirst().getId());
@@ -244,13 +253,50 @@ class ChatServiceImplTest {
     }
 
     @Test
+    void userBCannotCreateOrReadMessagesInUserASession() {
+        when(chatSessionMapper.selectById(20L))
+                .thenReturn(session(20L, 7L, "userA 会话"));
+
+        BusinessException createException = assertThrows(
+                BusinessException.class,
+                () -> service.createMessage(
+                        8L,
+                        20L,
+                        messageRequest("USER", "越权内容", "request-x")
+                )
+        );
+        BusinessException readException = assertThrows(
+                BusinessException.class,
+                () -> service.listMessages(8L, 20L)
+        );
+
+        assertEquals(40305, createException.getCode());
+        assertEquals(40305, readException.getCode());
+        verifyNoInteractions(userMapper, chatMessageMapper);
+    }
+
+    @Test
+    void shouldListSessionsOnlyByCurrentUser() {
+        when(userMapper.selectById(7L))
+                .thenReturn(user(7L, User.STATUS_ENABLED));
+        service.listSessions(7L);
+
+        verify(chatSessionMapper).selectByUserId(7L);
+    }
+
+    @Test
     void writeMethodsShouldHaveTransactionBoundaries() throws Exception {
         Transactional createSession = ChatServiceImpl.class
-                .getMethod("createSession", ChatSessionCreateRequest.class)
+                .getMethod(
+                        "createSession",
+                        Long.class,
+                        ChatSessionCreateRequest.class
+                )
                 .getAnnotation(Transactional.class);
         Transactional createMessage = ChatServiceImpl.class
                 .getMethod(
                         "createMessage",
+                        Long.class,
                         Long.class,
                         ChatMessageCreateRequest.class
                 )
@@ -260,9 +306,8 @@ class ChatServiceImplTest {
         assertNotNull(createMessage);
     }
 
-    private ChatSessionCreateRequest sessionRequest(Long userId, String title) {
+    private ChatSessionCreateRequest sessionRequest(String title) {
         ChatSessionCreateRequest request = new ChatSessionCreateRequest();
-        request.setUserId(userId);
         request.setTitle(title);
         return request;
     }

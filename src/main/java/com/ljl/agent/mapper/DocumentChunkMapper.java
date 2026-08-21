@@ -16,6 +16,8 @@ public interface DocumentChunkMapper {
     List<DocumentChunk> selectByDocumentId(
             Long documentId);
 
+    long countByDocumentId(Long documentId);
+
     DocumentChunk selectByDocumentIdAndChunkIndex(
             @Param("documentId") Long documentId,
             @Param("chunkIndex") Integer chunkIndex

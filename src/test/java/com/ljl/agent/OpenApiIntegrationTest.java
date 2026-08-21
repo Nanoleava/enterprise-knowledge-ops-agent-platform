@@ -32,7 +32,7 @@ class OpenApiIntegrationTest extends AbstractIntegrationTest {
     void shouldExposeCoreOpenApiContractAndSwaggerUi() throws Exception {
         HttpResponse<String> defaultApiDocs = get("/v3/api-docs");
         HttpResponse<String> apiDocs = get(
-                "/v3/api-docs/stage-3-day-1"
+                "/v3/api-docs/stage-4-day-1"
         );
 
         assertEquals(200, defaultApiDocs.statusCode());
@@ -41,6 +41,8 @@ class OpenApiIntegrationTest extends AbstractIntegrationTest {
                 "\"title\":\"LJL Java Agent Backend API\""
         ));
         assertCorePath(apiDocs.body(), "/api/auth/login");
+        assertCorePath(apiDocs.body(), "/api/auth/logout");
+        assertCorePath(apiDocs.body(), "/api/users/me");
         assertTrue(!apiDocs.body().contains("/api/users/login"));
         assertTrue(apiDocs.body().contains("\"bearerAuth\""));
         assertTrue(apiDocs.body().contains("\"scheme\":\"bearer\""));
@@ -48,6 +50,15 @@ class OpenApiIntegrationTest extends AbstractIntegrationTest {
         assertCorePath(apiDocs.body(), "/api/documents");
         assertCorePath(apiDocs.body(), "/api/documents/{id}");
         assertCorePath(apiDocs.body(), "/api/documents/{documentId}/chunks");
+        assertCorePath(
+                apiDocs.body(),
+                "/api/knowledge-bases/{knowledgeBaseId}/documents/upload"
+        );
+        assertCorePath(apiDocs.body(), "/api/documents/{documentId}/parse");
+        assertCorePath(
+                apiDocs.body(),
+                "/api/documents/{documentId}/processing-status"
+        );
         assertCorePath(apiDocs.body(), "/api/chat/sessions");
         assertCorePath(
                 apiDocs.body(),
@@ -56,6 +67,10 @@ class OpenApiIntegrationTest extends AbstractIntegrationTest {
         assertTrue(apiDocs.body().contains("\"400\""));
         assertTrue(apiDocs.body().contains("\"404\""));
         assertTrue(apiDocs.body().contains("\"409\""));
+        assertTrue(apiDocs.body().contains("\"413\""));
+        assertTrue(apiDocs.body().contains("\"422\""));
+        assertTrue(apiDocs.body().contains("\"429\""));
+        assertTrue(apiDocs.body().contains("\"503\""));
 
         HttpResponse<String> swaggerUi = get("/swagger-ui/index.html");
         assertEquals(200, swaggerUi.statusCode());

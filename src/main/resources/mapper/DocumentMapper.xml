@@ -15,10 +15,41 @@
         <result property="title" column="title"/>
         <result property="content" column="content"/>
         <result property="status" column="status"/>
+        <result property="originalFileName" column="original_file_name"/>
+        <result property="storedFileName" column="stored_file_name"/>
+        <result property="fileType" column="file_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="filePath" column="file_path"/>
+        <result property="fileChecksum" column="file_checksum"/>
+        <result property="parseStatus" column="parse_status"/>
+        <result property="chunkStatus" column="chunk_status"/>
+        <result property="processError" column="process_error"/>
+        <result property="processedAt" column="processed_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
 
     </resultMap>
+
+    <sql id="DocumentColumns">
+        id,
+        user_id,
+        knowledge_base_id,
+        title,
+        content,
+        status,
+        original_file_name,
+        stored_file_name,
+        file_type,
+        file_size,
+        file_path,
+        file_checksum,
+        parse_status,
+        chunk_status,
+        process_error,
+        processed_at,
+        created_at,
+        updated_at
+    </sql>
 
     <insert id="insert"
             parameterType="com.ljl.agent.entity.Document"
@@ -42,23 +73,56 @@
 
     </insert>
 
-    <delete id="deleteById">
+    <insert id="insertUploaded"
+            parameterType="com.ljl.agent.entity.Document"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO document (
+        user_id,
+        knowledge_base_id,
+        title,
+        content,
+        status,
+        original_file_name,
+        stored_file_name,
+        file_type,
+        file_size,
+        file_path,
+        file_checksum,
+        parse_status,
+        chunk_status,
+        process_error,
+        processed_at
+        ) VALUES (
+        #{userId},
+        #{knowledgeBaseId},
+        #{title},
+        #{content},
+        #{status},
+        #{originalFileName},
+        #{storedFileName},
+        #{fileType},
+        #{fileSize},
+        #{filePath},
+        #{fileChecksum},
+        #{parseStatus},
+        #{chunkStatus},
+        #{processError},
+        #{processedAt}
+        )
+    </insert>
+
+    <delete id="deleteByIdAndUserId">
         DELETE FROM document
         WHERE id = #{id}
+        AND user_id = #{userId}
     </delete>
 
     <select id="selectById"
             resultMap="DocumentResultMap">
 
         SELECT
-        id,
-        user_id,
-        knowledge_base_id,
-        title,
-        content,
-        status,
-        created_at,
-        updated_at
+        <include refid="DocumentColumns"/>
         FROM document
         WHERE id = #{id}
 
@@ -68,14 +132,7 @@
             resultMap="DocumentResultMap">
 
         SELECT
-        id,
-        user_id,
-        knowledge_base_id,
-        title,
-        content,
-        status,
-        created_at,
-        updated_at
+        <include refid="DocumentColumns"/>
         FROM document
         ORDER BY id DESC
 
@@ -85,16 +142,10 @@
             resultMap="DocumentResultMap">
 
         SELECT
-        id,
-        user_id,
-        knowledge_base_id,
-        title,
-        content,
-        status,
-        created_at,
-        updated_at
+        <include refid="DocumentColumns"/>
         FROM document
         WHERE knowledge_base_id = #{knowledgeBaseId}
+        AND user_id = #{userId}
         ORDER BY id DESC
 
     </select>
@@ -103,14 +154,7 @@
             resultMap="DocumentResultMap">
 
         SELECT
-        id,
-        user_id,
-        knowledge_base_id,
-        title,
-        content,
-        status,
-        created_at,
-        updated_at
+        <include refid="DocumentColumns"/>
         FROM document
         WHERE knowledge_base_id = #{knowledgeBaseId}
         AND title = #{title}
@@ -120,6 +164,8 @@
 
     <sql id="DocumentPageConditions">
         <where>
+            user_id = #{userId}
+
             <if test="keyword != null and keyword != ''">
                 AND (
                 title LIKE CONCAT('%', #{keyword}, '%')
@@ -137,14 +183,7 @@
             resultMap="DocumentResultMap">
 
         SELECT
-        id,
-        user_id,
-        knowledge_base_id,
-        title,
-        content,
-        status,
-        created_at,
-        updated_at
+        <include refid="DocumentColumns"/>
         FROM document
 
         <include refid="DocumentPageConditions"/>
@@ -163,5 +202,42 @@
 
         <include refid="DocumentPageConditions"/>
     </select>
+
+    <update id="markParseProcessing">
+        UPDATE document
+        SET parse_status = 'PROCESSING',
+            process_error = NULL
+        WHERE id = #{id}
+        AND user_id = #{userId}
+        AND file_path IS NOT NULL
+        <choose>
+            <when test="force">
+                AND parse_status IN ('PENDING', 'FAILED', 'SUCCESS')
+            </when>
+            <otherwise>
+                AND parse_status IN ('PENDING', 'FAILED')
+            </otherwise>
+        </choose>
+    </update>
+
+    <update id="updateParseSuccess">
+        UPDATE document
+        SET content = #{content},
+            parse_status = 'SUCCESS',
+            process_error = NULL,
+            processed_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        AND user_id = #{userId}
+        AND parse_status = 'PROCESSING'
+    </update>
+
+    <update id="updateParseFailed">
+        UPDATE document
+        SET parse_status = 'FAILED',
+            process_error = #{processError}
+        WHERE id = #{id}
+        AND user_id = #{userId}
+        AND parse_status = 'PROCESSING'
+    </update>
 
 </mapper>

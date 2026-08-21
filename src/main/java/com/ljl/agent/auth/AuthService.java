@@ -4,11 +4,13 @@ import com.ljl.agent.common.ErrorCode;
 import com.ljl.agent.dto.request.UserLoginRequest;
 import com.ljl.agent.dto.response.LoginResponse;
 import com.ljl.agent.exception.BusinessException;
+import com.ljl.agent.redis.TokenBlacklistService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,13 +21,16 @@ public class AuthService {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenService jwtTokenService;
+    private final TokenBlacklistService blacklistService;
 
     public AuthService(
             AuthenticationManager authenticationManager,
-            JwtTokenService jwtTokenService
+            JwtTokenService jwtTokenService,
+            TokenBlacklistService blacklistService
     ) {
         this.authenticationManager = authenticationManager;
         this.jwtTokenService = jwtTokenService;
+        this.blacklistService = blacklistService;
     }
 
     public LoginResponse login(UserLoginRequest request) {
@@ -57,5 +62,9 @@ public class AuthService {
                 token.expiresIn(),
                 loginUser.toUserVO()
         );
+    }
+
+    public void logout(Jwt jwt) {
+        blacklistService.revoke(jwt);
     }
 }

@@ -15,6 +15,8 @@ public interface KnowledgeBaseMapper {
 
     List<KnowledgeBase> selectAll();
 
+    List<KnowledgeBase> selectByUserId(@Param("userId") Long userId);
+
     KnowledgeBase selectByUserIdAndName(
             @Param("userId") Long userId,
             @Param("name") String name

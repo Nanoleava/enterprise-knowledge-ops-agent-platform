@@ -21,9 +21,9 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("LJL Java Agent Backend API")
-                        .version("stage-3-day-1")
+                        .version("stage-4-day-1")
                         .description(
-                                "阶段 3 Day 1 REST API：Spring Security + Bearer JWT 认证与接口级授权。"
+                                "阶段 4 DAY 1 REST API：在 JWT/Principal 安全底座上提供 TXT/Markdown 安全上传、解析与处理状态。"
                         )
                         .contact(new Contact().name("LJL")))
                 .components(new Components().addSecuritySchemes(
@@ -37,9 +37,9 @@ public class OpenApiConfig {
     }
 
     @Bean
-    public GroupedOpenApi stageThreeDayOneApi() {
+    public GroupedOpenApi stageFourDayOneApi() {
         return GroupedOpenApi.builder()
-                .group("stage-3-day-1")
+                .group("stage-4-day-1")
                 .pathsToMatch("/api/**")
                 .addOperationCustomizer((operation, handlerMethod) -> {
                     ApiResponses responses = operation.getResponses();
@@ -49,7 +49,11 @@ public class OpenApiConfig {
                     addResponseIfMissing(responses, "403", "身份有效但角色权限不足，或业务资源归属校验失败");
                     addResponseIfMissing(responses, "404", "请求的业务资源不存在");
                     addResponseIfMissing(responses, "409", "唯一约束或幂等键冲突");
+                    addResponseIfMissing(responses, "413", "上传文件超过配置上限");
+                    addResponseIfMissing(responses, "422", "文件已接收但文本解析失败");
+                    addResponseIfMissing(responses, "429", "超过 Redis 固定窗口限流阈值");
                     addResponseIfMissing(responses, "500", "系统内部错误");
+                    addResponseIfMissing(responses, "503", "JWT 黑名单认证依赖 Redis 暂时不可用");
                     return operation;
                 })
                 .build();

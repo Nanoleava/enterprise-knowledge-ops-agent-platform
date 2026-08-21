@@ -9,11 +9,6 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "文档创建请求")
 public class DocumentCreateRequest {
 
-    @Schema(description = "所属用户 ID", example = "1")
-    @NotNull(message = "用户ID不能为空")
-    @Positive(message = "用户ID必须是正整数")
-    private Long userId;
-
     @Schema(description = "所属知识库 ID", example = "1")
     @NotNull(message = "知识库ID不能为空")
     @Positive(message = "知识库ID必须是正整数")
@@ -28,14 +23,6 @@ public class DocumentCreateRequest {
     @NotBlank(message = "文档内容不能为空")
     @Size(max = 1_000_000, message = "文档内容长度不能超过 1000000 个字符")
     private String content;
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public void setUserId(Long userId) {
-        this.userId = userId;
-    }
 
     public Long getKnowledgeBaseId() {
         return knowledgeBaseId;

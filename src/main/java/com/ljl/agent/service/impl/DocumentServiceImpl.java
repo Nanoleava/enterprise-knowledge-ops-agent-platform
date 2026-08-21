@@ -47,7 +47,10 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public DocumentVO create(DocumentCreateRequest request) {
+    public DocumentVO create(
+            Long currentUserId,
+            DocumentCreateRequest request
+    ) {
         if (request == null) {
             throw new BusinessException(
                     ErrorCode.PARAM_INVALID,
@@ -56,8 +59,8 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         Long userId = requirePositiveId(
-                request.getUserId(),
-                "用户ID必须是正整数"
+                currentUserId,
+                "当前用户ID必须是正整数"
         );
         Long knowledgeBaseId = requirePositiveId(
                 request.getKnowledgeBaseId(),
@@ -69,21 +72,7 @@ public class DocumentServiceImpl implements DocumentService {
         );
         String content = requireContent(request.getContent());
 
-        KnowledgeBase knowledgeBase =
-                knowledgeBaseMapper.selectById(knowledgeBaseId);
-        if (knowledgeBase == null) {
-            throw knowledgeBaseNotFound(knowledgeBaseId);
-        }
-
-        if (!userId.equals(knowledgeBase.getUserId())) {
-            throw new BusinessException(
-                    ErrorCode.KNOWLEDGE_BASE_FORBIDDEN,
-                    "知识库不属于当前用户，userId="
-                            + userId
-                            + ", knowledgeBaseId="
-                            + knowledgeBaseId
-            );
-        }
+        requireOwnedKnowledgeBase(userId, knowledgeBaseId);
 
         Document existing =
                 documentMapper.selectByKnowledgeBaseIdAndTitle(
@@ -134,29 +123,23 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DocumentVO> listAll() {
-        return documentMapper.selectAll()
-                .stream()
-                .map(DocumentVO::from)
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<DocumentVO> listByKnowledgeBaseId(Long knowledgeBaseId) {
+    public List<DocumentVO> listByKnowledgeBaseId(
+            Long currentUserId,
+            Long knowledgeBaseId
+    ) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validKnowledgeBaseId = requirePositiveId(
                 knowledgeBaseId,
                 "知识库ID必须是正整数"
         );
 
-        KnowledgeBase knowledgeBase =
-                knowledgeBaseMapper.selectById(validKnowledgeBaseId);
-        if (knowledgeBase == null) {
-            throw knowledgeBaseNotFound(validKnowledgeBaseId);
-        }
+        requireOwnedKnowledgeBase(userId, validKnowledgeBaseId);
 
         return documentMapper
-                .selectByKnowledgeBaseId(validKnowledgeBaseId)
+                .selectByKnowledgeBaseId(userId, validKnowledgeBaseId)
                 .stream()
                 .map(DocumentVO::from)
                 .toList();
@@ -165,9 +148,14 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public DocumentChunkVO createChunk(
+            Long currentUserId,
             Long documentId,
             DocumentChunkCreateRequest request
     ) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validDocumentId = requirePositiveId(
                 documentId,
                 "文档ID必须是正整数"
@@ -184,7 +172,7 @@ public class DocumentServiceImpl implements DocumentService {
         );
         String content = requireChunkContent(request.getContent());
 
-        Document document = requireDocument(validDocumentId);
+        Document document = requireOwnedDocument(userId, validDocumentId);
         DocumentChunk existing =
                 documentChunkMapper.selectByDocumentIdAndChunkIndex(
                         validDocumentId,
@@ -235,12 +223,19 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DocumentChunkVO> listChunksByDocumentId(Long documentId) {
+    public List<DocumentChunkVO> listChunksByDocumentId(
+            Long currentUserId,
+            Long documentId
+    ) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validDocumentId = requirePositiveId(
                 documentId,
                 "文档ID必须是正整数"
         );
-        requireDocument(validDocumentId);
+        requireOwnedDocument(userId, validDocumentId);
 
         return documentChunkMapper.selectByDocumentId(validDocumentId)
                 .stream()
@@ -274,6 +269,44 @@ public class DocumentServiceImpl implements DocumentService {
             throw new BusinessException(
                     ErrorCode.DOCUMENT_NOT_FOUND,
                     "文档不存在，documentId=" + documentId
+            );
+        }
+        return document;
+    }
+
+    private KnowledgeBase requireOwnedKnowledgeBase(
+            Long currentUserId,
+            Long knowledgeBaseId
+    ) {
+        KnowledgeBase knowledgeBase =
+                knowledgeBaseMapper.selectById(knowledgeBaseId);
+        if (knowledgeBase == null) {
+            throw knowledgeBaseNotFound(knowledgeBaseId);
+        }
+        if (!currentUserId.equals(knowledgeBase.getUserId())) {
+            throw new BusinessException(
+                    ErrorCode.KNOWLEDGE_BASE_FORBIDDEN,
+                    "知识库不属于当前用户，userId="
+                            + currentUserId
+                            + ", knowledgeBaseId="
+                            + knowledgeBaseId
+            );
+        }
+        return knowledgeBase;
+    }
+
+    private Document requireOwnedDocument(
+            Long currentUserId,
+            Long documentId
+    ) {
+        Document document = requireDocument(documentId);
+        if (!currentUserId.equals(document.getUserId())) {
+            throw new BusinessException(
+                    ErrorCode.DOCUMENT_FORBIDDEN,
+                    "文档不属于当前用户，userId="
+                            + currentUserId
+                            + ", documentId="
+                            + documentId
             );
         }
         return document;
@@ -344,20 +377,28 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional(readOnly = true)
-    public DocumentVO getById(Long id) {
+    public DocumentVO getById(Long currentUserId, Long id) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validId = requirePositiveId(id, "文档ID必须是正整数");
-        Document document = requireDocument(validId);
+        Document document = requireOwnedDocument(userId, validId);
 
         return DocumentVO.from(document);
     }
 
     @Override
     @Transactional
-    public void deleteById(Long id) {
+    public void deleteById(Long currentUserId, Long id) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validId = requirePositiveId(id, "文档ID必须是正整数");
-        Document document = requireDocument(validId);
+        Document document = requireOwnedDocument(userId, validId);
 
-        int affected = documentMapper.deleteById(validId);
+        int affected = documentMapper.deleteByIdAndUserId(validId, userId);
 
         if (affected != 1) {
             throw new BusinessException(
@@ -376,7 +417,13 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<DocumentVO> page(
+            Long currentUserId,
             DocumentPageQuery query) {
+
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
 
         if (query == null) {
             throw new BusinessException(
@@ -393,6 +440,7 @@ public class DocumentServiceImpl implements DocumentService {
                     knowledgeBaseId,
                     "knowledgeBaseId必须为正数"
             );
+            requireOwnedKnowledgeBase(userId, knowledgeBaseId);
         }
 
         String keyword = query.getKeyword();
@@ -411,6 +459,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         long total = documentMapper.countPage(
+                userId,
                 keyword,
                 knowledgeBaseId
         );
@@ -426,6 +475,7 @@ public class DocumentServiceImpl implements DocumentService {
 
         List<Document> documents =
                 documentMapper.selectPage(
+                        userId,
                         keyword,
                         knowledgeBaseId,
                         (long) (page - 1) * size,

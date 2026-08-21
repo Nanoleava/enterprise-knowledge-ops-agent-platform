@@ -1,0 +1,38 @@
+@baseUrl = http://localhost:8080
+@userAToken = replace-with-user-a-token
+@userBToken = replace-with-user-b-token
+@userADocumentId = 1
+@userASessionId = 1
+
+### 当前用户本人
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{userAToken}}
+
+### 当前用户知识库列表（无 userId query）
+GET {{baseUrl}}/api/knowledge-bases
+Authorization: Bearer {{userAToken}}
+
+### P0：userB 不得向 userA 文档创建 chunk，预期 403
+POST {{baseUrl}}/api/documents/{{userADocumentId}}/chunks
+Authorization: Bearer {{userBToken}}
+Content-Type: application/json
+
+{
+  "chunkIndex": 99,
+  "content": "越权测试，不应写入数据库"
+}
+
+### 代表性消息写接口；超过窗口阈值后预期 429
+POST {{baseUrl}}/api/chat/sessions/{{userASessionId}}/messages
+Authorization: Bearer {{userAToken}}
+Content-Type: application/json
+
+{
+  "role": "USER",
+  "content": "限流测试",
+  "requestId": "replace-with-unique-request-id"
+}
+
+### 退出：预期 200，随后旧 token 请求受保护接口预期 401
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{userAToken}}

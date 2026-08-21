@@ -71,7 +71,7 @@ class DocumentServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(7L, request)
         );
 
         assertEquals(40402, exception.getCode());
@@ -94,7 +94,7 @@ class DocumentServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(8L, request)
         );
 
         assertEquals(40302, exception.getCode());
@@ -115,7 +115,7 @@ class DocumentServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(7L, request)
         );
 
         assertEquals(40903, exception.getCode());
@@ -149,7 +149,7 @@ class DocumentServiceImplTest {
             return value;
         });
 
-        DocumentVO result = service.create(request);
+        DocumentVO result = service.create(7L, request);
 
         assertEquals("入门", inserted.get().getTitle());
         assertEquals(content, inserted.get().getContent());
@@ -165,7 +165,7 @@ class DocumentServiceImplTest {
     void shouldRejectInvalidKnowledgeBaseIdWhenListing() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.listByKnowledgeBaseId(0L)
+                () -> service.listByKnowledgeBaseId(7L, 0L)
         );
 
         assertEquals(40001, exception.getCode());
@@ -178,7 +178,11 @@ class DocumentServiceImplTest {
     @Test
     void createShouldHaveTransactionBoundary() throws Exception {
         Transactional transactional = DocumentServiceImpl.class
-                .getMethod("create", DocumentCreateRequest.class)
+                .getMethod(
+                        "create",
+                        Long.class,
+                        DocumentCreateRequest.class
+                )
                 .getAnnotation(Transactional.class);
 
         assertNotNull(transactional);
@@ -211,7 +215,7 @@ class DocumentServiceImplTest {
             return value;
         });
 
-        DocumentChunkVO result = service.createChunk(30L, request);
+        DocumentChunkVO result = service.createChunk(7L, 30L, request);
 
         assertEquals(30L, inserted.get().getDocumentId());
         assertEquals(20L, inserted.get().getKnowledgeBaseId());
@@ -226,10 +230,29 @@ class DocumentServiceImplTest {
     }
 
     @Test
+    void userBCannotCreateChunkUnderUserADocumentAndInsertDoesNotRun() {
+        when(documentMapper.selectById(30L))
+                .thenReturn(document(30L, 20L));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.createChunk(
+                        8L,
+                        30L,
+                        chunkRequest(0, "越权内容", null)
+                )
+        );
+
+        assertEquals(40304, exception.getCode());
+        verifyNoInteractions(documentChunkMapper);
+    }
+
+    @Test
     void shouldRejectChunkWhenDocumentDoesNotExist() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createChunk(
+                        7L,
                         30L,
                         chunkRequest(0, "正文", null)
                 )
@@ -250,6 +273,7 @@ class DocumentServiceImplTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createChunk(
+                        7L,
                         30L,
                         chunkRequest(2, "新内容", null)
                 )
@@ -268,6 +292,7 @@ class DocumentServiceImplTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.createChunk(
+                        7L,
                         30L,
                         chunkRequest(2, "正文", null)
                 )
@@ -287,7 +312,7 @@ class DocumentServiceImplTest {
                 ));
 
         List<DocumentChunkVO> result =
-                service.listChunksByDocumentId(30L);
+                service.listChunksByDocumentId(7L, 30L);
 
         assertEquals(2, result.size());
         assertEquals(0, result.getFirst().getChunkIndex());
@@ -299,6 +324,7 @@ class DocumentServiceImplTest {
         Transactional transactional = DocumentServiceImpl.class
                 .getMethod(
                         "createChunk",
+                        Long.class,
                         Long.class,
                         DocumentChunkCreateRequest.class
                 )
@@ -312,7 +338,7 @@ class DocumentServiceImplTest {
         when(documentMapper.selectById(30L))
                 .thenReturn(document(30L, 20L));
 
-        DocumentVO result = service.getById(30L);
+        DocumentVO result = service.getById(7L, 30L);
 
         assertEquals(30L, result.getId());
         assertEquals(20L, result.getKnowledgeBaseId());
@@ -323,7 +349,7 @@ class DocumentServiceImplTest {
     void shouldReturnNotFoundWhenGettingMissingDocument() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.getById(30L)
+                () -> service.getById(7L, 30L)
         );
 
         assertEquals(40403, exception.getCode());
@@ -334,12 +360,32 @@ class DocumentServiceImplTest {
     void shouldDeleteExistingDocumentUsingDatabaseCascade() {
         when(documentMapper.selectById(30L))
                 .thenReturn(document(30L, 20L));
-        when(documentMapper.deleteById(30L)).thenReturn(1);
+        when(documentMapper.deleteByIdAndUserId(30L, 7L)).thenReturn(1);
 
-        service.deleteById(30L);
+        service.deleteById(7L, 30L);
 
-        verify(documentMapper).deleteById(30L);
+        verify(documentMapper).deleteByIdAndUserId(30L, 7L);
         verifyNoInteractions(documentChunkMapper);
+    }
+
+    @Test
+    void userBCannotReadOrDeleteUserADocument() {
+        when(documentMapper.selectById(30L))
+                .thenReturn(document(30L, 20L));
+
+        BusinessException readException = assertThrows(
+                BusinessException.class,
+                () -> service.getById(8L, 30L)
+        );
+        BusinessException deleteException = assertThrows(
+                BusinessException.class,
+                () -> service.deleteById(8L, 30L)
+        );
+
+        assertEquals(40304, readException.getCode());
+        assertEquals(40304, deleteException.getCode());
+        verify(documentMapper, never())
+                .deleteByIdAndUserId(anyLong(), anyLong());
     }
 
     @Test
@@ -349,7 +395,7 @@ class DocumentServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.deleteById(30L)
+                () -> service.deleteById(7L, 30L)
         );
 
         assertEquals(50007, exception.getCode());
@@ -359,7 +405,7 @@ class DocumentServiceImplTest {
     @Test
     void deleteShouldHaveTransactionBoundary() throws Exception {
         Transactional transactional = DocumentServiceImpl.class
-                .getMethod("deleteById", Long.class)
+                .getMethod("deleteById", Long.class, Long.class)
                 .getAnnotation(Transactional.class);
 
         assertNotNull(transactional);
@@ -369,14 +415,16 @@ class DocumentServiceImplTest {
     @Test
     void shouldPageDocumentsWithTrimmedDynamicFilters() {
         DocumentPageQuery query = pageQuery(2, 5, "  Java  ", 20L);
-        when(documentMapper.countPage("Java", 20L)).thenReturn(8L);
-        when(documentMapper.selectPage("Java", 20L, 5L, 5))
+        when(knowledgeBaseMapper.selectById(20L))
+                .thenReturn(knowledgeBase(20L, 7L));
+        when(documentMapper.countPage(7L, "Java", 20L)).thenReturn(8L);
+        when(documentMapper.selectPage(7L, "Java", 20L, 5L, 5))
                 .thenReturn(List.of(
                         document(31L, 20L),
                         document(30L, 20L)
                 ));
 
-        PageResult<DocumentVO> result = service.page(query);
+        PageResult<DocumentVO> result = service.page(7L, query);
 
         assertEquals(8L, result.getTotal());
         assertEquals(2, result.getPage());
@@ -384,22 +432,22 @@ class DocumentServiceImplTest {
         assertEquals(2L, result.getTotalPages());
         assertEquals(2, result.getRecords().size());
         assertEquals(31L, result.getRecords().getFirst().getId());
-        verify(documentMapper).countPage("Java", 20L);
-        verify(documentMapper).selectPage("Java", 20L, 5L, 5);
+        verify(documentMapper).countPage(7L, "Java", 20L);
+        verify(documentMapper).selectPage(7L, "Java", 20L, 5L, 5);
     }
 
     @Test
     void shouldSkipPageQueryWhenNoDocumentMatches() {
         DocumentPageQuery query = pageQuery(1, 10, "   ", null);
-        when(documentMapper.countPage(null, null)).thenReturn(0L);
+        when(documentMapper.countPage(7L, null, null)).thenReturn(0L);
 
-        PageResult<DocumentVO> result = service.page(query);
+        PageResult<DocumentVO> result = service.page(7L, query);
 
         assertEquals(0L, result.getTotal());
         assertEquals(0L, result.getTotalPages());
         assertEquals(List.of(), result.getRecords());
         verify(documentMapper, never()).selectPage(
-                any(), any(), anyLong(), anyInt()
+                any(), any(), any(), anyLong(), anyInt()
         );
     }
 
@@ -408,7 +456,7 @@ class DocumentServiceImplTest {
         DocumentPageQuery invalidSize = pageQuery(1, 101, null, null);
         BusinessException sizeException = assertThrows(
                 BusinessException.class,
-                () -> service.page(invalidSize)
+                () -> service.page(7L, invalidSize)
         );
 
         DocumentPageQuery invalidKeyword = pageQuery(
@@ -419,7 +467,7 @@ class DocumentServiceImplTest {
         );
         BusinessException keywordException = assertThrows(
                 BusinessException.class,
-                () -> service.page(invalidKeyword)
+                () -> service.page(7L, invalidKeyword)
         );
 
         assertEquals(40001, sizeException.getCode());
@@ -435,7 +483,7 @@ class DocumentServiceImplTest {
     @Test
     void pageShouldUseReadOnlyTransaction() throws Exception {
         Transactional transactional = DocumentServiceImpl.class
-                .getMethod("page", DocumentPageQuery.class)
+                .getMethod("page", Long.class, DocumentPageQuery.class)
                 .getAnnotation(Transactional.class);
 
         assertNotNull(transactional);
@@ -449,7 +497,6 @@ class DocumentServiceImplTest {
             String content
     ) {
         DocumentCreateRequest request = new DocumentCreateRequest();
-        request.setUserId(userId);
         request.setKnowledgeBaseId(knowledgeBaseId);
         request.setTitle(title);
         request.setContent(content);

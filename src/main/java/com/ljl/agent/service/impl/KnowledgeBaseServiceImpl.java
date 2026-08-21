@@ -38,7 +38,10 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
     @Override
     @Transactional
-    public KnowledgeBaseVO create(KnowledgeBaseCreateRequest request) {
+    public KnowledgeBaseVO create(
+            Long currentUserId,
+            KnowledgeBaseCreateRequest request
+    ) {
         if (request == null) {
             throw new BusinessException(
                     ErrorCode.PARAM_INVALID,
@@ -47,8 +50,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         }
 
         Long userId = requirePositiveId(
-                request.getUserId(),
-                "用户ID必须是正整数"
+                currentUserId,
+                "当前用户ID必须是正整数"
         );
         String name = requireText(
                 request.getName(),
@@ -115,8 +118,12 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<KnowledgeBaseVO> listAll() {
-        return knowledgeBaseMapper.selectAll()
+    public List<KnowledgeBaseVO> listByCurrentUser(Long currentUserId) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
+        return knowledgeBaseMapper.selectByUserId(userId)
                 .stream()
                 .map(KnowledgeBaseVO::from)
                 .toList();
@@ -172,12 +179,26 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
     @Override
     @Transactional(readOnly = true)
-    public KnowledgeBaseVO getById(Long id) {
+    public KnowledgeBaseVO getById(Long currentUserId, Long id) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户ID必须是正整数"
+        );
         Long validId = requirePositiveId(
                 id,
                 "知识库ID必须是正整数"
         );
         KnowledgeBase knowledgeBase = requireKnowledgeBase(validId);
+
+        if (!userId.equals(knowledgeBase.getUserId())) {
+            throw new BusinessException(
+                    ErrorCode.KNOWLEDGE_BASE_FORBIDDEN,
+                    "知识库不属于当前用户，userId="
+                            + userId
+                            + ", knowledgeBaseId="
+                            + validId
+            );
+        }
 
         return KnowledgeBaseVO.from(knowledgeBase);
     }

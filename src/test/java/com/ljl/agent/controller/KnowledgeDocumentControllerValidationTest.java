@@ -10,6 +10,7 @@ import com.ljl.agent.dto.response.DocumentVO;
 import com.ljl.agent.dto.response.KnowledgeBaseVO;
 import com.ljl.agent.exception.BusinessException;
 import com.ljl.agent.exception.GlobalExceptionHandler;
+import com.ljl.agent.security.CurrentUser;
 import com.ljl.agent.service.DocumentService;
 import com.ljl.agent.service.KnowledgeBaseService;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,7 @@ class KnowledgeDocumentControllerValidationTest {
 
     private KnowledgeBaseService knowledgeBaseService;
     private DocumentService documentService;
+    private CurrentUser currentUser;
     private LocalValidatorFactoryBean validator;
     private MockMvc mockMvc;
 
@@ -45,12 +47,17 @@ class KnowledgeDocumentControllerValidationTest {
     void setUp() {
         knowledgeBaseService = mock(KnowledgeBaseService.class);
         documentService = mock(DocumentService.class);
+        currentUser = mock(CurrentUser.class);
+        when(currentUser.requireUserId(any())).thenReturn(7L);
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
 
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new KnowledgeBaseController(knowledgeBaseService),
-                        new DocumentController(documentService)
+                        new KnowledgeBaseController(
+                                knowledgeBaseService,
+                                currentUser
+                        ),
+                        new DocumentController(documentService, currentUser)
                 )
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
@@ -68,7 +75,6 @@ class KnowledgeDocumentControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "userId": 0,
                                   "name": "   "
                                 }
                                 """))
@@ -76,8 +82,6 @@ class KnowledgeDocumentControllerValidationTest {
                 .andExpect(jsonPath("$.code").value(40001))
                 .andExpect(jsonPath("$.message")
                         .value("参数校验失败"))
-                .andExpect(jsonPath("$.data.userId")
-                        .value("用户ID必须是正整数"))
                 .andExpect(jsonPath("$.data.name")
                         .value("知识库名称不能为空"));
 
@@ -113,7 +117,6 @@ class KnowledgeDocumentControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "userId": 0,
                                   "knowledgeBaseId": -1,
                                   "title": "   ",
                                   "content": "   "
@@ -121,8 +124,6 @@ class KnowledgeDocumentControllerValidationTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(40001))
-                .andExpect(jsonPath("$.data.userId")
-                        .value("用户ID必须是正整数"))
                 .andExpect(jsonPath("$.data.knowledgeBaseId")
                         .value("知识库ID必须是正整数"))
                 .andExpect(jsonPath("$.data.title")
@@ -136,6 +137,7 @@ class KnowledgeDocumentControllerValidationTest {
     @Test
     void shouldMapDuplicateKnowledgeBaseToHttp409() throws Exception {
         when(knowledgeBaseService.create(
+                eq(7L),
                 any(KnowledgeBaseCreateRequest.class)
         )).thenThrow(new BusinessException(
                 40902,
@@ -155,8 +157,38 @@ class KnowledgeDocumentControllerValidationTest {
     }
 
     @Test
+    void shouldIgnoreForgedOwnerAndPassPrincipalUserIdToService()
+            throws Exception {
+        KnowledgeBaseVO created = new KnowledgeBaseVO();
+        created.setId(5L);
+        created.setUserId(7L);
+        created.setName("Java资料");
+        when(knowledgeBaseService.create(
+                eq(7L),
+                any(KnowledgeBaseCreateRequest.class)
+        )).thenReturn(created);
+
+        mockMvc.perform(post("/api/knowledge-bases")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userId": 999,
+                                  "name": "Java资料"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(7));
+
+        verify(knowledgeBaseService).create(
+                eq(7L),
+                any(KnowledgeBaseCreateRequest.class)
+        );
+    }
+
+    @Test
     void shouldMapOwnershipFailureToHttp403() throws Exception {
         when(documentService.create(
+                eq(7L),
                 any(DocumentCreateRequest.class)
         )).thenThrow(new BusinessException(
                 40302,
@@ -202,6 +234,7 @@ class KnowledgeDocumentControllerValidationTest {
     @Test
     void shouldMapMissingDocumentForChunkToHttp404() throws Exception {
         when(documentService.createChunk(
+                eq(7L),
                 eq(10L),
                 any(DocumentChunkCreateRequest.class)
         )).thenThrow(new BusinessException(
@@ -224,6 +257,7 @@ class KnowledgeDocumentControllerValidationTest {
     @Test
     void shouldMapDuplicateChunkToHttp409() throws Exception {
         when(documentService.createChunk(
+                eq(7L),
                 eq(10L),
                 any(DocumentChunkCreateRequest.class)
         )).thenThrow(new BusinessException(
@@ -247,6 +281,7 @@ class KnowledgeDocumentControllerValidationTest {
     void shouldReturnCreatedDocumentChunk() throws Exception {
         DocumentChunkVO chunk = chunk(21L, 10L, 5L, 0, "第一段");
         when(documentService.createChunk(
+                eq(7L),
                 eq(10L),
                 any(DocumentChunkCreateRequest.class)
         )).thenReturn(chunk);
@@ -271,7 +306,7 @@ class KnowledgeDocumentControllerValidationTest {
 
     @Test
     void shouldReturnDocumentChunksInServiceOrder() throws Exception {
-        when(documentService.listChunksByDocumentId(10L))
+        when(documentService.listChunksByDocumentId(7L, 10L))
                 .thenReturn(List.of(
                         chunk(21L, 10L, 5L, 0, "第一段"),
                         chunk(22L, 10L, 5L, 1, "第二段")
@@ -291,7 +326,8 @@ class KnowledgeDocumentControllerValidationTest {
         knowledgeBase.setId(5L);
         knowledgeBase.setUserId(2L);
         knowledgeBase.setName("Java资料");
-        when(knowledgeBaseService.getById(5L)).thenReturn(knowledgeBase);
+        when(knowledgeBaseService.getById(7L, 5L))
+                .thenReturn(knowledgeBase);
 
         mockMvc.perform(get("/api/knowledge-bases/5"))
                 .andExpect(status().isOk())
@@ -302,7 +338,7 @@ class KnowledgeDocumentControllerValidationTest {
 
     @Test
     void shouldReturnDocumentById() throws Exception {
-        when(documentService.getById(10L))
+        when(documentService.getById(7L, 10L))
                 .thenReturn(document(10L, 5L, "分页设计"));
 
         mockMvc.perform(get("/api/documents/10"))
@@ -320,7 +356,7 @@ class KnowledgeDocumentControllerValidationTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data").doesNotExist());
 
-        verify(documentService).deleteById(10L);
+        verify(documentService).deleteById(7L, 10L);
     }
 
     @Test
@@ -332,7 +368,10 @@ class KnowledgeDocumentControllerValidationTest {
                 2,
                 5
         );
-        when(documentService.page(any(DocumentPageQuery.class)))
+        when(documentService.page(
+                eq(7L),
+                any(DocumentPageQuery.class)
+        ))
                 .thenReturn(page);
 
         mockMvc.perform(get("/api/documents")

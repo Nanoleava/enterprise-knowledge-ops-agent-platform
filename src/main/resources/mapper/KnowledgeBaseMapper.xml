@@ -66,6 +66,22 @@
 
     </select>
 
+    <select id="selectByUserId"
+            resultMap="KnowledgeBaseResultMap">
+
+        SELECT
+        id,
+        user_id,
+        name,
+        description,
+        created_at,
+        updated_at
+        FROM knowledge_base
+        WHERE user_id = #{userId}
+        ORDER BY id DESC
+
+    </select>
+
     <select id="selectByUserIdAndName"
             resultMap="KnowledgeBaseResultMap">
 

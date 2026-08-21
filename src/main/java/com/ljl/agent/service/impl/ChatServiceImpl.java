@@ -45,7 +45,10 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
-    public ChatSessionVO createSession(ChatSessionCreateRequest request) {
+    public ChatSessionVO createSession(
+            Long currentUserId,
+            ChatSessionCreateRequest request
+    ) {
         if (request == null) {
             throw new BusinessException(
                     ErrorCode.PARAM_INVALID,
@@ -54,8 +57,8 @@ public class ChatServiceImpl implements ChatService {
         }
 
         Long userId = requirePositiveId(
-                request.getUserId(),
-                "用户 ID 必须是正整数"
+                currentUserId,
+                "当前用户 ID 必须是正整数"
         );
         requireEnabledUser(userId);
 
@@ -101,10 +104,10 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChatSessionVO> listSessions(Long userId) {
+    public List<ChatSessionVO> listSessions(Long currentUserId) {
         Long validUserId = requirePositiveId(
-                userId,
-                "用户 ID 必须是正整数"
+                currentUserId,
+                "当前用户 ID 必须是正整数"
         );
         requireUser(validUserId);
 
@@ -117,9 +120,14 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public ChatMessageVO createMessage(
+            Long currentUserId,
             Long sessionId,
             ChatMessageCreateRequest request) {
 
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户 ID 必须是正整数"
+        );
         Long validSessionId = requirePositiveId(
                 sessionId,
                 "会话 ID 必须是正整数"
@@ -132,8 +140,8 @@ public class ChatServiceImpl implements ChatService {
             );
         }
 
-        ChatSession session = requireSession(validSessionId);
-        requireEnabledUser(session.getUserId());
+        ChatSession session = requireOwnedSession(userId, validSessionId);
+        requireEnabledUser(userId);
 
         String role = normalizeRole(request.getRole());
 
@@ -170,7 +178,7 @@ public class ChatServiceImpl implements ChatService {
          * 不从客户端接收 userId。
          * 始终根据 session 推导，防止 userId 与 sessionId 归属不一致。
          */
-        message.setUserId(session.getUserId());
+        message.setUserId(userId);
 
         message.setRole(role);
         message.setContent(content);
@@ -220,12 +228,19 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChatMessageVO> listMessages(Long sessionId) {
+    public List<ChatMessageVO> listMessages(
+            Long currentUserId,
+            Long sessionId
+    ) {
+        Long userId = requirePositiveId(
+                currentUserId,
+                "当前用户 ID 必须是正整数"
+        );
         Long validSessionId = requirePositiveId(
                 sessionId,
                 "会话 ID 必须是正整数"
         );
-        requireSession(validSessionId);
+        requireOwnedSession(userId, validSessionId);
 
         return chatMessageMapper.selectBySessionId(validSessionId)
                 .stream()
@@ -268,6 +283,23 @@ public class ChatServiceImpl implements ChatService {
             );
         }
 
+        return session;
+    }
+
+    private ChatSession requireOwnedSession(
+            Long currentUserId,
+            Long sessionId
+    ) {
+        ChatSession session = requireSession(sessionId);
+        if (!currentUserId.equals(session.getUserId())) {
+            throw new BusinessException(
+                    ErrorCode.CHAT_SESSION_FORBIDDEN,
+                    "聊天会话不属于当前用户，userId="
+                            + currentUserId
+                            + ", sessionId="
+                            + sessionId
+            );
+        }
         return session;
     }
 

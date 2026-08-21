@@ -1,6 +1,8 @@
 target/
 .idea/
 *.iml
+storage/uploads/**
+!storage/uploads/.gitkeep
 .env
 .env.*
 !.env.example

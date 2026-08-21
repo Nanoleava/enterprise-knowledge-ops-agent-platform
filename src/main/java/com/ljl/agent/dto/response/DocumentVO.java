@@ -18,6 +18,20 @@ public class DocumentVO {
 
     private String status;
 
+    private String originalFileName;
+
+    private String fileType;
+
+    private Long fileSize;
+
+    private String parseStatus;
+
+    private String chunkStatus;
+
+    private String processError;
+
+    private LocalDateTime processedAt;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -31,6 +45,13 @@ public class DocumentVO {
         vo.setTitle(document.getTitle());
         vo.setContent(document.getContent());
         vo.setStatus(document.getStatus());
+        vo.setOriginalFileName(document.getOriginalFileName());
+        vo.setFileType(document.getFileType());
+        vo.setFileSize(document.getFileSize());
+        vo.setParseStatus(document.getParseStatus());
+        vo.setChunkStatus(document.getChunkStatus());
+        vo.setProcessError(document.getProcessError());
+        vo.setProcessedAt(document.getProcessedAt());
         vo.setCreatedAt(document.getCreatedAt());
         vo.setUpdatedAt(document.getUpdatedAt());
 
@@ -83,6 +104,62 @@ public class DocumentVO {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getOriginalFileName() {
+        return originalFileName;
+    }
+
+    public void setOriginalFileName(String originalFileName) {
+        this.originalFileName = originalFileName;
+    }
+
+    public String getFileType() {
+        return fileType;
+    }
+
+    public void setFileType(String fileType) {
+        this.fileType = fileType;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
+
+    public String getParseStatus() {
+        return parseStatus;
+    }
+
+    public void setParseStatus(String parseStatus) {
+        this.parseStatus = parseStatus;
+    }
+
+    public String getChunkStatus() {
+        return chunkStatus;
+    }
+
+    public void setChunkStatus(String chunkStatus) {
+        this.chunkStatus = chunkStatus;
+    }
+
+    public String getProcessError() {
+        return processError;
+    }
+
+    public void setProcessError(String processError) {
+        this.processError = processError;
+    }
+
+    public LocalDateTime getProcessedAt() {
+        return processedAt;
+    }
+
+    public void setProcessedAt(LocalDateTime processedAt) {
+        this.processedAt = processedAt;
     }
 
     public LocalDateTime getCreatedAt() {

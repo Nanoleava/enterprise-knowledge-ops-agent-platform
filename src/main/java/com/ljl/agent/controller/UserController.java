@@ -3,12 +3,14 @@ package com.ljl.agent.controller;
 import com.ljl.agent.common.Result;
 import com.ljl.agent.dto.request.UserRegisterRequest;
 import com.ljl.agent.dto.response.UserVO;
+import com.ljl.agent.security.CurrentUser;
 import com.ljl.agent.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,9 +31,11 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final CurrentUser currentUser;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, CurrentUser currentUser) {
         this.userService = userService;
+        this.currentUser = currentUser;
     }
 
     /**
@@ -68,6 +72,19 @@ public class UserController {
     public Result<List<UserVO>> findAll() {
         List<UserVO> users = userService.findAll();
         return Result.success(users);
+    }
+
+    /**
+     * 查询当前 JWT 对应的本人信息。
+     */
+    @GetMapping("/me")
+    @Operation(summary = "查询当前登录用户")
+    public Result<UserVO> me(Authentication authentication) {
+        return Result.success(
+                userService.findById(
+                        currentUser.requireUserId(authentication)
+                )
+        );
     }
 
 }

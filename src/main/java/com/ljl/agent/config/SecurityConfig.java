@@ -2,13 +2,18 @@ package com.ljl.agent.config;
 
 import com.ljl.agent.security.JsonAccessDeniedHandler;
 import com.ljl.agent.security.JsonAuthenticationEntryPoint;
+import com.ljl.agent.security.BlacklistAwareJwtDecoder;
 import com.ljl.agent.security.JwtAuthorityConverter;
 import com.ljl.agent.security.ProjectUserDetailsService;
+import com.ljl.agent.redis.TokenBlacklistService;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
@@ -24,6 +29,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 import javax.crypto.SecretKey;
 import java.time.Clock;
@@ -32,7 +38,10 @@ import java.time.Clock;
  * 阶段 3 Day 1 HTTP 安全边界和官方 Resource Server JWT 配置。
  */
 @Configuration
-@EnableConfigurationProperties(SecurityProperties.class)
+@EnableConfigurationProperties({
+        SecurityProperties.class,
+        RateLimitProperties.class
+})
 public class SecurityConfig {
 
     private final Environment environment;
@@ -66,8 +75,8 @@ public class SecurityConfig {
                 .build();
     }
 
-    @Bean
-    public JwtDecoder jwtDecoder(
+    @Bean("baseJwtDecoder")
+    public JwtDecoder baseJwtDecoder(
             SecretKey jwtSecretKey,
             SecurityProperties properties
     ) {
@@ -79,6 +88,18 @@ public class SecurityConfig {
                 JwtValidators.createDefaultWithIssuer(properties.getIssuer())
         );
         return decoder;
+    }
+
+    @Bean
+    @Primary
+    public JwtDecoder jwtDecoder(
+            @Qualifier("baseJwtDecoder") JwtDecoder baseJwtDecoder,
+            TokenBlacklistService blacklistService
+    ) {
+        return new BlacklistAwareJwtDecoder(
+                baseJwtDecoder,
+                blacklistService
+        );
     }
 
     @Bean
@@ -103,31 +124,41 @@ public class SecurityConfig {
     }
 
     @Bean
+    @Order(1)
+    public SecurityFilterChain logoutSecurityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            @Qualifier("baseJwtDecoder") JwtDecoder baseJwtDecoder
+    ) throws Exception {
+        http.securityMatcher(PathPatternRequestMatcher.pathPattern(
+                HttpMethod.POST,
+                "/api/auth/logout"
+        ));
+        configureStatelessResourceServer(
+                http,
+                jwtAuthenticationConverter,
+                baseJwtDecoder
+        );
+        http.authorizeHttpRequests(authorize -> authorize
+                .anyRequest()
+                .authenticated()
+        );
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            JwtAuthenticationConverter jwtAuthenticationConverter
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            JwtDecoder jwtDecoder
     ) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(
-                        SessionCreationPolicy.STATELESS
-                ))
-                .requestCache(cache -> cache.disable())
-                .formLogin(form -> form.disable())
-                .httpBasic(basic -> basic.disable())
-                .logout(logout -> logout.disable())
-                .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
-                )
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(
-                                jwtAuthenticationConverter
-                        ))
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
-                )
-                .authorizeHttpRequests(authorize -> {
+        configureStatelessResourceServer(
+                http,
+                jwtAuthenticationConverter,
+                jwtDecoder
+        );
+        http.authorizeHttpRequests(authorize -> {
                     authorize
                             .requestMatchers(HttpMethod.GET, "/api/health")
                             .permitAll()
@@ -149,6 +180,11 @@ public class SecurityConfig {
                     authorize
                             .requestMatchers(
                                     HttpMethod.GET,
+                                    "/api/users/me"
+                            )
+                            .authenticated()
+                            .requestMatchers(
+                                    HttpMethod.GET,
                                     "/api/users",
                                     "/api/users/**"
                             )
@@ -160,5 +196,35 @@ public class SecurityConfig {
                 });
 
         return http.build();
+    }
+
+    private void configureStatelessResourceServer(
+            HttpSecurity http,
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            JwtDecoder jwtDecoder
+    ) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS
+                ))
+                .requestCache(cache -> cache.disable())
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
+                .logout(logout -> logout.disable())
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(jwt -> jwt
+                                .decoder(jwtDecoder)
+                                .jwtAuthenticationConverter(
+                                        jwtAuthenticationConverter
+                                )
+                        )
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                );
     }
 }

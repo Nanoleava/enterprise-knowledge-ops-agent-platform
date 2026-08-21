@@ -2,6 +2,7 @@ package com.ljl.agent.exception;
 
 import com.ljl.agent.common.ErrorCode;
 import com.ljl.agent.common.Result;
+import com.ljl.agent.redis.BlacklistUnavailableException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -15,6 +16,9 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -124,6 +128,39 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(
+                Result.failure(ErrorCode.DOCUMENT_FILE_TOO_LARGE)
+        );
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Result<Void>> handleMissingServletRequestPart(
+            MissingServletRequestPartException exception
+    ) {
+        return ResponseEntity.badRequest().body(
+                Result.failure(
+                        ErrorCode.DOCUMENT_FILE_INVALID.getCode(),
+                        "缺少必要文件参数：" + exception.getRequestPartName()
+                )
+        );
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Result<Void>> handleMultipartException(
+            MultipartException exception
+    ) {
+        return ResponseEntity.badRequest().body(
+                Result.failure(
+                        ErrorCode.DOCUMENT_FILE_INVALID.getCode(),
+                        "Multipart 上传请求格式不正确"
+                )
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleException(
             Exception exception
@@ -132,6 +169,23 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 Result.failure(ErrorCode.SYSTEM_ERROR)
+        );
+    }
+
+    @ExceptionHandler(BlacklistUnavailableException.class)
+    public ResponseEntity<Result<Void>> handleBlacklistUnavailable(
+            BlacklistUnavailableException exception
+    ) {
+        LOGGER.error(
+                "JWT blacklist write failed: exceptionType={}",
+                exception.getCause() == null
+                        ? exception.getClass().getSimpleName()
+                        : exception.getCause().getClass().getSimpleName()
+        );
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                Result.failure(
+                        ErrorCode.AUTHENTICATION_SERVICE_UNAVAILABLE
+                )
         );
     }
 
@@ -159,6 +213,18 @@ public class GlobalExceptionHandler {
         }
         if (code >= 40900 && code < 41000) {
             return HttpStatus.CONFLICT;
+        }
+        if (code >= 41300 && code < 41400) {
+            return HttpStatus.PAYLOAD_TOO_LARGE;
+        }
+        if (code >= 42200 && code < 42300) {
+            return HttpStatus.UNPROCESSABLE_ENTITY;
+        }
+        if (code >= 42900 && code < 43000) {
+            return HttpStatus.TOO_MANY_REQUESTS;
+        }
+        if (code >= 50300 && code < 50400) {
+            return HttpStatus.SERVICE_UNAVAILABLE;
         }
         if (code >= 50000) {
             return HttpStatus.INTERNAL_SERVER_ERROR;

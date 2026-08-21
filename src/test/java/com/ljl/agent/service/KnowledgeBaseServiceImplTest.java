@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -55,7 +56,7 @@ class KnowledgeBaseServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(7L, request)
         );
 
         assertEquals(40401, exception.getCode());
@@ -74,7 +75,7 @@ class KnowledgeBaseServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(7L, request)
         );
 
         assertEquals(40301, exception.getCode());
@@ -94,7 +95,7 @@ class KnowledgeBaseServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.create(request)
+                () -> service.create(7L, request)
         );
 
         assertEquals(40902, exception.getCode());
@@ -125,7 +126,7 @@ class KnowledgeBaseServiceImplTest {
                     return value;
                 });
 
-        KnowledgeBaseVO result = service.create(request);
+        KnowledgeBaseVO result = service.create(7L, request);
 
         assertEquals("Java资料", inserted.get().getName());
         assertEquals("学习资料", inserted.get().getDescription());
@@ -138,7 +139,11 @@ class KnowledgeBaseServiceImplTest {
     @Test
     void createShouldHaveTransactionBoundary() throws Exception {
         Transactional transactional = KnowledgeBaseServiceImpl.class
-                .getMethod("create", KnowledgeBaseCreateRequest.class)
+                .getMethod(
+                        "create",
+                        Long.class,
+                        KnowledgeBaseCreateRequest.class
+                )
                 .getAnnotation(Transactional.class);
 
         assertNotNull(transactional);
@@ -153,7 +158,7 @@ class KnowledgeBaseServiceImplTest {
         when(knowledgeBaseMapper.selectById(20L))
                 .thenReturn(knowledgeBase);
 
-        KnowledgeBaseVO result = service.getById(20L);
+        KnowledgeBaseVO result = service.getById(7L, 20L);
 
         assertEquals(20L, result.getId());
         assertEquals(7L, result.getUserId());
@@ -161,10 +166,34 @@ class KnowledgeBaseServiceImplTest {
     }
 
     @Test
+    void shouldRejectKnowledgeBaseOwnedByAnotherUser() {
+        KnowledgeBase knowledgeBase = new KnowledgeBase();
+        knowledgeBase.setId(20L);
+        knowledgeBase.setUserId(7L);
+        when(knowledgeBaseMapper.selectById(20L))
+                .thenReturn(knowledgeBase);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getById(8L, 20L)
+        );
+
+        assertEquals(40302, exception.getCode());
+    }
+
+    @Test
+    void shouldQueryKnowledgeBasesDirectlyByCurrentUser() {
+        service.listByCurrentUser(7L);
+
+        verify(knowledgeBaseMapper).selectByUserId(7L);
+        verify(userMapper, org.mockito.Mockito.never()).selectById(7L);
+    }
+
+    @Test
     void shouldRejectInvalidKnowledgeBaseIdBeforeQuery() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.getById(0L)
+                () -> service.getById(7L, 0L)
         );
 
         assertEquals(40001, exception.getCode());
@@ -176,7 +205,7 @@ class KnowledgeBaseServiceImplTest {
     void shouldReturnNotFoundWhenKnowledgeBaseDoesNotExist() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service.getById(20L)
+                () -> service.getById(7L, 20L)
         );
 
         assertEquals(40402, exception.getCode());
@@ -189,7 +218,7 @@ class KnowledgeBaseServiceImplTest {
     @Test
     void getByIdShouldUseReadOnlyTransaction() throws Exception {
         Transactional transactional = KnowledgeBaseServiceImpl.class
-                .getMethod("getById", Long.class)
+                .getMethod("getById", Long.class, Long.class)
                 .getAnnotation(Transactional.class);
 
         assertNotNull(transactional);
@@ -203,7 +232,6 @@ class KnowledgeBaseServiceImplTest {
     ) {
         KnowledgeBaseCreateRequest request =
                 new KnowledgeBaseCreateRequest();
-        request.setUserId(userId);
         request.setName(name);
         request.setDescription(description);
         return request;
