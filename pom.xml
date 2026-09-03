@@ -14,12 +14,12 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.ljl</groupId>
-    <artifactId>agent-backend</artifactId>
+    <groupId>com.enterprise.agent</groupId>
+    <artifactId>enterprise-knowledge-ops-agent-platform</artifactId>
     <version>0.0.1-SNAPSHOT</version>
 
-    <name>agent-backend</name>
-    <description>Java backend and Agent learning project</description>
+    <name>Enterprise Knowledge Base &amp; Intelligent Operations Agent Platform</name>
+    <description>Secure enterprise knowledge management and intelligent operations agent platform</description>
 
     <properties>
         <java.version>26</java.version>

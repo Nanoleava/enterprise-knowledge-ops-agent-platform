@@ -32,7 +32,7 @@ if ([string]::IsNullOrWhiteSpace($env:DB_USERNAME)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($env:JWT_ISSUER)) {
-    $env:JWT_ISSUER = "https://ljl-agent-backend.local"
+    $env:JWT_ISSUER = "https://enterprise-agent-platform.local"
 }
 
 if ([string]::IsNullOrWhiteSpace($env:JWT_ACCESS_TOKEN_TTL)) {

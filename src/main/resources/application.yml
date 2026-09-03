@@ -1,6 +1,6 @@
 spring:
   application:
-    name: agent-backend
+    name: enterprise-knowledge-ops-agent-platform
   servlet:
     multipart:
       max-file-size: ${DOCUMENT_MAX_FILE_SIZE:10MB}
@@ -20,7 +20,7 @@ server:
 app:
   security:
     jwt:
-      issuer: ${JWT_ISSUER:https://ljl-agent-backend.local}
+      issuer: ${JWT_ISSUER:https://enterprise-agent-platform.local}
       secret-base64: ${JWT_SECRET_BASE64}
       access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:30m}
   rate-limit:

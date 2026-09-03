@@ -1,7 +1,6 @@
 package com.ljl.agent.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
@@ -20,12 +19,11 @@ public class OpenApiConfig {
         String schemeName = "bearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("LJL Java Agent Backend API")
+                        .title("Enterprise Knowledge Base & Intelligent Operations Agent Platform API")
                         .version("stage-4-day-1")
                         .description(
-                                "阶段 4 DAY 1 REST API：在 JWT/Principal 安全底座上提供 TXT/Markdown 安全上传、解析与处理状态。"
-                        )
-                        .contact(new Contact().name("LJL")))
+                                "Secure REST API for enterprise knowledge management, document ingestion, and intelligent operations workflows."
+                        ))
                 .components(new Components().addSecuritySchemes(
                         schemeName,
                         new SecurityScheme()
