@@ -1,11 +1,11 @@
 # Java 后端 + Agent 开发项目源指引
 
-> 文档版本：v4.0
-> 更新日期：2026-08-20
+> 文档版本：v4.1
+> 更新日期：2026-09-01
 > 依据文件：`C:\Users\nano\Desktop\LJL-Java-Agent\java_backend_agent_learning_plan.md`
 > 当前项目检查路径：`C:\Users\nano\Desktop\LJL-Java-Agent\agent-backend`
 > 阶段 1 历史项目路径：`C:\Users\nano\Desktop\lijunling\10services_data\nano_personal1`
-> 当前实施证据：`agent-backend/docs/stage3-day2-implementation-report.md`
+> 当前实施证据：`agent-backend/docs/stage4-day1-implementation-report.md`
 
 本文档是后续每天让 ChatGPT 指导学习和写代码的项目源。ChatGPT 需要把它当作“路线图 + 阶段验收标准 + 目录结构规范”，不要只按单个知识点零散教学。
 
@@ -14,11 +14,11 @@
 当前默认指导状态：
 
 ```text
-截至 2026-08-20，阶段 1、阶段 2、阶段 3 已全部完成。
-阶段 3 已形成 Spring Security + JWT、Principal 资源隔离、Redis 退出黑名单、Lua 原子限流和完整测试闭环。
-2026-08-20 使用真实 MySQL、真实 Redis 重新执行全量测试：114 项，0 失败，0 错误，0 跳过，BUILD SUCCESS。
-当前精确位置：阶段 4 DAY 1 开始前。
-下一主线：用两天完成文档上传、文件存储、解析、清洗、自动切片、批量入库、处理状态和失败恢复闭环。
+截至 2026-09-01，阶段 1、阶段 2、阶段 3 与阶段 4 DAY 1 已全部完成。
+阶段 4 DAY 1 已形成安全 Multipart 上传、配置化本地存储、文件元数据与处理状态、TXT/Markdown 解析清洗、失败重试和状态查询闭环。
+2026-09-01 使用真实 MySQL、真实 Redis 和文件系统重新执行全量测试：137 项，0 失败，0 错误，0 跳过，BUILD SUCCESS。
+当前精确位置：阶段 4 DAY 2 开始前。
+下一主线：完成 PDF 解析、固定长度 + overlap 自动切片、批量原子替换、处理日志、失败恢复和删除物理文件清理，执行阶段 4 总验收。
 ```
 
 ---
@@ -39,15 +39,16 @@
 ### 1.1 当前默认指导状态
 
 ```text
-当前日期基线：2026-08-20
-当前默认阶段：阶段 4（DAY 1 开始前）
+当前日期基线：2026-09-01
+当前默认阶段：阶段 4（DAY 2 开始前）
 当前默认项目：C:\Users\nano\Desktop\LJL-Java-Agent\agent-backend
 当前默认包名：com.ljl.agent
 阶段 1：已完成
 阶段 2：已完成
-阶段 3：已完成；114 tests、0 failure、0 error、0 skipped，真实 MySQL/Redis 已复验
-当前默认任务：按第 7 章完成阶段 4 DAY 1 的上传、存储、状态与 TXT/Markdown 解析闭环
-当前第一优先级：先确定数据迁移、状态机、存储边界和 API 契约，再写上传 Controller
+阶段 3：已完成；原始基线 114 tests，安全能力在当前 137 项全量回归中继续通过
+阶段 4 DAY 1：已完成；137 tests、0 failure、0 error、0 skipped，真实 MySQL/Redis/文件系统已复验
+当前默认任务：按第 7.11 节完成阶段 4 DAY 2 的 PDF、自动切片、批量入库、失败恢复和删除清理闭环
+当前第一优先级：先复跑 DAY 1 基线，再完成 PdfParser 失败边界与 FixedLengthChunkStrategy 纯算法测试
 当前禁止任务：Embedding、Qdrant、RAG 问答、SSE、Tool Calling、消息队列、Docker 化
 ```
 
@@ -76,7 +77,7 @@
 
 ### 1.3 证据优先与阶段推进规则
 
-1. 先运行阶段 3 全量回归或检查最近一次可信结果；114 项基线出现失败时，先判断是否由阶段 4 改造引入。
+1. 先运行最近一次可信全量回归；阶段 3 原始基线为 114 项，阶段 4 DAY 1 后当前基线为 137 项，任一既有测试失败都要先判断是否由当前改造引入。
 2. “能收到 MultipartFile”不等于完成上传；必须同时有 owner 校验、类型/大小校验、安全文件名、存储结果和失败清理。
 3. “文件已保存”不等于完成文档处理；必须形成“文件 -> 解析文本 -> 清洗 -> chunk -> MySQL”的可验证链路。
 4. `document.status` 是业务生命周期；`parseStatus` 和 `chunkStatus` 是处理状态，不得混成一个含义模糊的字段。
@@ -223,6 +224,8 @@ DAY 1 只有在上传、存储、状态和 TXT/Markdown 解析最小闭环全部
 2026-08-18：阶段 3 DAY 1 完成。
 2026-08-19：阶段 3 DAY 2、阶段 3 总出口完成。
 2026-08-20：真实 MySQL + Redis 全量复验通过，正式进入阶段 4 DAY 1。
+2026-08-21：阶段 4 DAY 1 完成，形成安全上传与 TXT/Markdown 解析闭环，137 项全量测试通过并提交 `2679565`。
+2026-09-01：真实 MySQL、Redis、文件系统与 137 项测试再次复验通过，正式进入阶段 4 DAY 2。
 ```
 
 旧快照不再驱动当前任务。需要复盘时查 `docs/stage3-day1-implementation-report.md`、`docs/stage3-day2-implementation-report.md` 或 Git 历史。
@@ -271,7 +274,7 @@ C:\Users\nano\Desktop\LJL-Java-Agent\agent-backend
 阶段 5～阶段 9：未开始。
 ```
 
-### 2.5 当前快照的使用方式与阶段 4 起点
+### 2.5 2026-08-20 快照的使用方式与阶段 4 起点
 
 默认下一步是第 7.10 节阶段 4 DAY 1，不再重做阶段 3。当前项目可直接复用：
 
@@ -296,7 +299,48 @@ C:\Users\nano\Desktop\LJL-Java-Agent\agent-backend
 
 当前 `document.content` 为 `NOT NULL`，上传后解析前可暂存空字符串；是否调整列约束必须在 DAY 1 迁移设计中明确。当前文档删除只删除数据库记录并依赖外键级联 chunk，阶段 4 加入文件后必须扩展清理语义。
 
-### 2.6 后续快照固定格式
+### 2.6 当前快照：2026-09-01（阶段 4 DAY 1 完成）
+
+检查路径：
+
+```text
+C:\Users\nano\Desktop\LJL-Java-Agent\agent-backend
+```
+
+本次按第 7.10 节逐项复核源码、SQL 005、配置、Controller/Service/Mapper、Storage/Parser/Cleaner、OpenAPI、测试、真实 MySQL、Redis 和现有上传文件。
+
+当前可信证据：
+
+```text
+1. Git main/origin/main 位于提交 2679565：feat: complete secure document ingestion milestone；复核前 worktree 干净。
+2. Redis 容器 PING 返回 PONG；dev profile + 真实 MySQL + REDIS_INTEGRATION_TEST=true 执行 mvn clean test。
+3. Tests run: 137；Failures: 0；Errors: 0；Skipped: 0；BUILD SUCCESS。
+4. SQL 005 所需 10 个 document 字段、idx_document_user_parse_status 和 3 个 CHECK 约束在真实 MySQL 中存在。
+5. 当前数据库有 22 条 document：19 条历史手工文档保持 NOT_APPLICABLE/NOT_APPLICABLE，3 条上传文档为 1 条 PENDING/PENDING、2 条 SUCCESS/PENDING；旧数据未丢失。
+6. 3 个上传文件均位于受控相对路径，磁盘大小与数据库 file_size 一致，SHA-256 与 file_checksum 全部匹配。
+7. TXT/Markdown 上传、解析到 document.content、FAILED 重试、processing-status、userB 越权零污染均有自动化证据。
+8. 用户已使用 Postman 跑通真实 Markdown 上传、parse 与 status；document 102、112 的 content 已在 MySQL 验证非空。
+9. README、OpenAPI stage-4-day-1 分组、环境变量示例、错误码和阶段 4 DAY 1 实施报告已经同步。
+10. 数据库密码、JWT、Token、用户上传原文件和构建产物均未进入 Git。
+```
+
+当前阶段判断：
+
+```text
+阶段 1：已完成。
+阶段 2：已完成。
+阶段 3：已完成并持续回归通过。
+阶段 4 DAY 1：第 7.10.4 全部出口项通过。
+阶段 4 DAY 2：尚未开始，当前精确位置为 DAY 2 开始前。
+阶段 4 总验收：尚未执行；必须等待 PDF、自动切片、批量原子替换、处理日志、失败恢复和删除清理完成。
+阶段 5～阶段 9：未开始。
+```
+
+非阻塞技术债：JDK 26 测试输出包含 Mockito 动态 agent 与少量 deprecated API 编译警告；它们不影响 DAY 1 功能或测试结论，但后续依赖升级时应处理。默认 `./storage/uploads` 仅用于开发，生产部署应通过 `DOCUMENT_STORAGE_ROOT` 指向仓库外数据卷或后续替换对象存储。
+
+下一唯一行动：按第 7.11 节复跑 DAY 1 后进入 DAY 2；不提前进入 Embedding、Qdrant 或 RAG。
+
+### 2.7 后续快照固定格式
 
 每个 DAY 和阶段出口只追加一份简短快照：
 
@@ -526,7 +570,7 @@ Postman：逐项人工演示由用户明确豁免，不构成阻塞
 
 ## 7. 阶段 4：知识库文档处理（当前阶段）
 
-> 当前精确位置：DAY 1 开始前。
+> 当前精确位置：DAY 1 已完成，DAY 2 开始前。
 > 两天总目标：把现有“手工创建 Document/Chunk”升级成安全、可重试、可测试的真实文档摄取流水线。
 
 ### 7.1 当前项目起点与阶段目标
@@ -538,22 +582,20 @@ Postman：逐项人工演示由用户明确豁免，不构成阻塞
 - `DocumentMapper` 已有按用户分页和文档删除；
 - `DocumentChunkMapper` 已有单条插入与按文档有序查询；
 - 数据库已有 `document`、`document_chunk`、唯一索引和 chunk 外键级联；
-- Spring Security/JWT/Redis 和统一错误响应已经通过阶段 3 验收。
+- Spring Security/JWT/Redis 和统一错误响应已经通过阶段 3 验收；
+- DAY 1 已新增 SQL 005、文档文件元数据、parse/chunk 独立状态和 Schema 验证；
+- DAY 1 已新增配置化 Multipart、本地安全存储、UUID 相对路径、SHA-256 和失败补偿；
+- DAY 1 已新增上传、parse、processing-status API，以及 TXT/Markdown Parser、Registry 与 TextCleaner；
+- DAY 1 已用单元、MockMvc、真实 MySQL/Redis/文件系统和 137 项全量回归完成验收。
 
-当前缺口同样已经确认：
+进入 DAY 2 前的剩余缺口已经确认：
 
 ```text
-没有 Multipart 上传接口
-没有 storage/uploads 文件存储
-没有文件类型、大小、路径安全配置
-document 没有文件元数据和 parse/chunk 状态
-没有 TXT / Markdown / PDF parser
-没有 TextCleaner
+没有 PDF 解析依赖与 PdfParser
 没有自动 ChunkStrategy
 没有 chunk batchInsert / replace
-没有处理日志、失败状态和重试
+没有 process 总编排、chunk 失败恢复与 DocumentProcessLog
 现有文档删除不会清理物理文件
-pom.xml 没有 PDF 解析依赖
 ```
 
 阶段结束时必须具备：
@@ -568,7 +610,7 @@ pom.xml 没有 PDF 解析依赖
 7. 失败文档可重试，重试不会留下重复或半套 chunk。
 8. 删除文档时数据库和物理文件都有明确清理策略。
 9. owner、非法文件、解析失败、事务失败均有自动化证据。
-10. 阶段 3 的 114 项回归继续全部通过。
+10. 阶段 3 原始 114 项基线与当前阶段 4 测试共同组成的 137 项全量回归继续全部通过。
 ```
 
 ### 7.2 两天范围与完成物
@@ -645,7 +687,7 @@ Document 插入失败：补偿删除刚保存的文件
 
 ### 7.4 最终目录结构增量
 
-以下是结合当前 `com.ljl.agent` 结构的目标增量，不代表这些文件已经存在：
+以下是结合当前 `com.ljl.agent` 结构的阶段最终目标增量。带上传、TXT/Markdown、Storage、Parser、Cleaner 和 DAY 1 测试的文件已经存在；PDF、ChunkStrategy、ProcessLog 与 process 编排仍是 DAY 2 待办：
 
 ```text
 agent-backend/.gitignore
@@ -977,6 +1019,8 @@ while start < text.length:
 
 ### 7.10 DAY 1：安全上传、存储、状态与 TXT/Markdown
 
+> 完成状态：已于 2026-08-21 实现，并于 2026-09-01 按本节出口重新复验通过。详细证据见 `agent-backend/docs/stage4-day1-implementation-report.md` 与第 2.6 节快照。
+
 #### 7.10.1 DAY 1 学习目标
 
 学懂并实现：
@@ -1020,23 +1064,23 @@ userB 上传到 userA KB -> 403，磁盘和数据库均无新增
 Document 插入失败 -> 已存文件被补偿删除
 解析失败 -> parse=FAILED、chunk=PENDING、无 chunk
 状态查询越权 -> 403
-阶段 3 114 项基线无回归
+阶段 3 原始 114 项基线无回归，加入 DAY 1 测试后的 137 项全量回归全部通过
 ```
 
 #### 7.10.4 DAY 1 出口
 
 ```text
-[ ] SQL 005 在真实 MySQL 成功执行，旧数据不丢。
-[ ] TXT/Markdown 能经受保护 API 上传并安全保存。
-[ ] currentUserId 与 KB owner 校验先于文件写入。
-[ ] 原文件名不参与真实路径，响应不泄露绝对路径。
-[ ] document 元数据、content、parse/chunk 状态正确。
-[ ] 状态 API 可查询成功与失败。
-[ ] 单元、Controller、Mapper/集成和全量测试 0 failure、0 error。
-[ ] README/OpenAPI 与配置示例同步。
+[x] SQL 005 在真实 MySQL 成功执行，旧数据不丢。
+[x] TXT/Markdown 能经受保护 API 上传并安全保存。
+[x] currentUserId 与 KB owner 校验先于文件写入。
+[x] 原文件名不参与真实路径，响应不泄露绝对路径。
+[x] document 元数据、content、parse/chunk 状态正确。
+[x] 状态 API 可查询成功与失败。
+[x] 单元、Controller、Mapper/集成和全量测试 0 failure、0 error。
+[x] README/OpenAPI 与配置示例同步。
 ```
 
-全部勾选才进入 DAY 2。
+以上已全部勾选，可以进入 DAY 2。DAY 1 的 `parseStatus=SUCCESS`、`chunkStatus=PENDING` 是正确边界；chunk 生成与 `chunkStatus=SUCCESS` 属于 DAY 2。
 
 ### 7.11 DAY 2：PDF、清洗、自动切片、批量入库和总验收
 
@@ -1197,12 +1241,12 @@ userB process/status/chunks/delete userA 文档 -> 403，文件与数据不变
 [x] 阶段 1 完成
 [x] 阶段 2 完成
 [x] 阶段 3 完成并于 2026-08-20 复验
-[ ] 阶段 4 DAY 1
+[x] 阶段 4 DAY 1 完成并于 2026-09-01 复验
 [ ] 阶段 4 DAY 2
 [ ] 阶段 4 总验收
 ```
 
-当前下一唯一行动：先人工确认当前 diff 并创建阶段 3 Git 快照，再按第 7.10 节运行 114 项基线并设计 `005_stage4_document_ingestion.sql`、状态机与上传 API 契约；在迁移设计通过前不直接堆 Controller 代码。
+当前下一唯一行动：按第 7.11 节复跑 DAY 1 基线并检查测试临时目录清理，然后进入 PdfParser 失败边界与 FixedLengthChunkStrategy 单元测试；不提前进入 Embedding、Qdrant 或 RAG。
 
 ---
 
@@ -1700,7 +1744,7 @@ DAY 2：Principal 用户资源隔离、Redis token 黑名单、Lua 原子限流�
 
 ```text
 主题：RAG 知识库系统
-当前：阶段 4 DAY 1 开始前
+当前：阶段 4 DAY 1 已完成，DAY 2 开始前
 阶段 4 DAY 1：迁移、文件安全、上传、存储、TXT/Markdown 解析和状态
 阶段 4 DAY 2：PDF、清洗、固定长度切片、批量入库、失败重试和删除清理
 阶段 4 输出：稳定、可溯源、可按 owner 查询的 document_chunk
@@ -1916,7 +1960,7 @@ DAY 1 必须留下一个可查询的真实结果：文件位于受控目录，`d
 
 ```text
 1. 已读取哪些实际代码、SQL、配置和测试；当前是 DAY 1、DAY 2 还是验收补缺？
-2. 最近一次真实 MySQL/Redis 全量结果是什么；114 项阶段 3 基线是否保持？
+2. 最近一次真实 MySQL/Redis 全量结果是什么；阶段 3 原始 114 项与当前 137 项全量基线是否保持？
 3. 今天的唯一闭环属于迁移、存储、上传、解析、清洗、切片、状态还是清理？
 4. 当前 document/content/status/chunk 约束是什么；迁移是否向前兼容旧数据？
 5. API 契约、Multipart 参数、响应字段、错误码和 HTTP 状态是否先定义？
@@ -1993,7 +2037,7 @@ DAY 1 必须留下一个可查询的真实结果：文件位于受控目录，`d
 
 ## 17. 动态下一步行动判定
 
-当前默认下一步：阶段 4 DAY 1。阶段 1～阶段 3 已完成，不再执行旧 CRUD 收尾、JWT 重写或 Redis 扩张。
+当前默认下一步：阶段 4 DAY 2。阶段 1～阶段 3 与阶段 4 DAY 1 已完成，不再执行旧 CRUD 收尾、JWT 重写、Redis 扩张或重复建设上传/解析入口。
 
 ### 17.1 每次开始时的判定树
 
@@ -2001,7 +2045,7 @@ DAY 1 必须留下一个可查询的真实结果：文件位于受控目录，`d
 第一步：验证已完成基线
   -> 项目不能编译或阶段 3 回归失败：先定位是否由当前改动引入
   -> MySQL/Redis 外部环境不可用：记录唯一条件并修复环境，不能虚报集成通过
-  -> 114 项基线与 Redis PING 正常：进入阶段 4 判断
+  -> 当前 137 项全量基线与 Redis PING 正常：进入阶段 4 判断
 
 第二步：检查 DAY 1
   -> 没有 SQL 005/文件状态字段：先设计迁移与状态机
@@ -2023,19 +2067,19 @@ DAY 1 必须留下一个可查询的真实结果：文件位于受控目录，`d
   -> 全部通过：记录阶段 4 完成快照，进入阶段 5 Embedding + Qdrant
 ```
 
-当前命中结果：阶段 3 全部通过；项目没有 SQL 005、上传、存储和 parser，因此从第二步第一项开始。
+当前命中结果：阶段 3 与阶段 4 DAY 1 全部通过；SQL 005、上传、存储、TXT/Markdown parser、cleaner、状态和 DAY 1 测试均已存在，因此从第三步 DAY 2 开始。
 
 ### 17.2 当前固定执行顺序
 
 ```text
 1. [完成] 阶段 1～阶段 3 与 2026-08-20 全量复验。
-2. [当前] 人工确认当前 diff 并创建阶段 3 Git 快照；未获用户授权时只提示，不自动提交。
-3. [待办] DAY 1：读取 Document/Chunk 基线，设计 SQL 005、状态机、API 和配置。
-4. [待办] DAY 1：安全 LocalFileStorageService 与路径/补偿测试。
-5. [待办] DAY 1：上传 API + currentUserId/KB owner + 元数据落库。
-6. [待办] DAY 1：TXT/Markdown Parser + Cleaner + content/status。
-7. [待办] DAY 1：processing-status、MockMvc、真实 MySQL、README/OpenAPI 和 DAY 1 出口。
-8. [待办] DAY 2：PdfParser 与失败边界。
+2. [完成] 提交阶段 3/阶段 4 DAY 1 Git 里程碑 `2679565` 并推送 origin/main。
+3. [完成] DAY 1：读取 Document/Chunk 基线，设计并执行 SQL 005、状态机、API 和配置。
+4. [完成] DAY 1：安全 LocalFileStorageService 与路径/补偿测试。
+5. [完成] DAY 1：上传 API + currentUserId/KB owner + 元数据落库。
+6. [完成] DAY 1：TXT/Markdown Parser + Cleaner + content/status。
+7. [完成] DAY 1：processing-status、MockMvc、真实 MySQL、README/OpenAPI 和 DAY 1 出口；2026-09-01 以 137 项测试复验。
+8. [当前] DAY 2：PdfParser 与失败边界。
 9. [待办] DAY 2：FixedLengthChunkStrategy + overlap 边界。
 10. [待办] DAY 2：delete old chunks + batchInsert + 原子替换。
 11. [待办] DAY 2：process 状态机、日志、重试和重复提交。
@@ -2080,7 +2124,7 @@ P3：Markdown 标题切片、checksum 去重、OCR、对象存储、异步队列
 | SQL/状态未定 | 完成迁移设计与 Schema 测试 |
 | 存储服务未通过 | 只修路径、类型、补偿和临时目录 |
 | 上传成功但解析失败 | 只完成当前格式 Parser/Cleaner |
-| DAY 1 通过 | 开始 FixedLengthChunkStrategy 单元测试 |
+| DAY 1 通过 | 按第 7.11 节先复跑基线，再完成 PdfParser 边界与 FixedLengthChunkStrategy 单元测试 |
 | chunk 算法通过 | 完成 batchInsert 与原子替换 |
 | 主链路通过但失败项缺失 | 只补对应 FAILED/重试/越权证据 |
 | 第 7.13 全通过 | 记录完成快照，进入阶段 5 |
